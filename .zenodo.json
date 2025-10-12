@@ -1,0 +1,38 @@
+{
+  "title": "Generalized Spectral Kurtosis toolkit",
+  "upload_type": "software",
+  "description": "A modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. Built upon the theoretical framework introduced in Nita & Gary (2010, PASP 122, 595) and the renormalization logic from Nita & Hellbourg (2020, IEEE RFI2020), pyGSK provides thresholding, cross-correlation diagnostics, and pedagogical plotting for signal detection in spectral data.",
+  "creators": [
+    {
+      "name": "Nita, Gelu M.",
+      "affiliation": "New Jersey Institute of Technology",
+      "orcid": "0000-0003-2846-2453"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "Spectral Kurtosis",
+    "signal detection",
+    "radio astronomy",
+    "statistical diagnostics",
+    "open science",
+    "RFI mitigation"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.1086/652409",
+      "relation": "isReferencedBy",
+      "resource_type": "publication"
+    },
+    {
+      "identifier": "https://ieeexplore.ieee.org/document/9232200",
+      "relation": "isReferencedBy",
+      "resource_type": "publication"
+    },
+    {
+      "identifier": "https://github.com/suncast-org/pyGSK",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ]
+}
