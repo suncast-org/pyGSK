@@ -56,3 +56,6 @@ push = true
 "src/pygsk/__init__.py" = [
     '__version__ = "{version}"',
 ]
+
+[project.optional-dependencies]
+dev = ["pytest"]
