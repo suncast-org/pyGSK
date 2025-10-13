@@ -2,6 +2,7 @@ cff-version: 1.2.0
 message: "If you use pyGSK in your research, please cite this file."
 title: Generalized Spectral Kurtosis toolkit
 version: 0.1.0-beta
+doi: 10.5281/zenodo.17336193
 date-released: 2025-10-12
 authors:
   - family-names: Nita
