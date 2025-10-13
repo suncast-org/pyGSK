@@ -8,7 +8,7 @@
 Developed and maintained by [Gelu M. Nita](https://orcid.org/0000-0003-2846-2453), pyGSK builds upon the theoretical framework introduced in:
 
 - Nita & Gary (2010), *The Generalized Spectral Kurtosis Estimator*, PASP 122, 595. [DOI: 10.1086/652409](https://doi.org/10.1086/652409)
-- Nita & Hellbourg (2020), *A Cross-Correlation Based Spectral Kurtosis RFI Detector*, IEEE RFI2020. [DOI: 10.1109/RFI0.1.1](https://ieeexplore.ieee.org/document/9232200)
+- Nita & Hellbourg (2020), *A Cross-Correlation Based Spectral Kurtosis RFI Detector*, IEEE RFI2020. [DOI: 10.1109/RFI0.1.2](https://ieeexplore.ieee.org/document/9232200)
 
 ---
 
@@ -63,7 +63,7 @@ If you use **pyGSK** in your research, please cite:
 >  
 > Theoretical foundations:  
 > - Nita & Gary (2010), PASP 122, 595. [DOI: 10.1086/652409](https://doi.org/10.1086/652409)  
-> - Nita & Hellbourg (2020), IEEE RFI2020. [DOI: 10.1109/RFI0.1.1](https://ieeexplore.ieee.org/document/9232200)
+> - Nita & Hellbourg (2020), IEEE RFI2020. [DOI: 10.1109/RFI0.1.2](https://ieeexplore.ieee.org/document/9232200)
 
 ---
 
