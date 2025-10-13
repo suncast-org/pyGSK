@@ -23,13 +23,12 @@ Developed and maintained by [Gelu M. Nita](https://orcid.org/0000-0003-2846-2453
 
 ## 📦 Installation
 
-Clone the repository and install in editable mode:
+You can install pyGSK via PyPI:
 
 ```bash
-git clone https://github.com/suncast-org/pyGSK.git
-cd pyGSK
-pip install -e .
-```
+pip install pyGSK
+
+
 
 ---
 
