@@ -20,15 +20,8 @@ dependencies = [
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["pyGSK", "cli", "tests"]
-
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "build",
-    "twine"
-]
 
 [project.urls]
 "Homepage" = "https://github.com/SUNCAST-org/pyGSK"
