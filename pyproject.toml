@@ -31,3 +31,25 @@ dev = [
 "Homepage" = "https://github.com/SUNCAST-org/pyGSK"
 "Source" = "https://github.com/SUNCAST-org/pyGSK"
 "Bug Tracker" = "https://github.com/SUNCAST-org/pyGSK/issues"
+
+[tool.bumpver]
+version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
+current_version = "0.1.0"
+commit_message = "bump version {old_version} → {new_version}"
+tag_message = "Release {new_version}"
+tag_scope = "default"
+commit = true
+tag = true
+push = true
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = [
+    'version = "{version}"',
+]
+"README.md" = [
+    "{version}",
+]
+
+"src/pygsk/__init__.py" = [
+    '__version__ = "{version}"',
+]
