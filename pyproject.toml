@@ -20,7 +20,7 @@ dependencies = [
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-["pyGSK", "cli", "tests"]
+include = ["pyGSK", "cli", "tests"]
 
 
 [project.optional-dependencies]
