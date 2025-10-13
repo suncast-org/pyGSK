@@ -34,6 +34,7 @@ current_version = "0.1.4"
 commit_message = "bump version {old_version} → {new_version}"
 tag_message = "Release {new_version}"
 tag_scope = "default"
+tag_format = "v{version}"
 commit = true
 tag = true
 push = true
