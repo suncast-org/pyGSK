@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyGSK"
-version = "0.1.5"
+version = "v0.1.5"
 description = "Generalized Spectral Kurtosis Toolkit"
 authors = [
     { name = "Gelu M. Nita" }
@@ -27,26 +27,3 @@ include = ["pyGSK", "cli", "tests"]
 "Homepage" = "https://github.com/SUNCAST-org/pyGSK"
 "Source" = "https://github.com/SUNCAST-org/pyGSK"
 "Bug Tracker" = "https://github.com/SUNCAST-org/pyGSK/issues"
-
-[tool.bumpver]
-version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
-current_version = "0.1.5"
-commit_message = "bump version {old_version} → {new_version}"
-tag_message = "Release {new_version}"
-tag_scope = "default"
-tag_format = "v{version}"
-commit = true
-tag = true
-push = true
-
-[tool.bumpver.file_patterns]
-"pyproject.toml" = [
-    'version = "{version}"',
-]
-"README.md" = [
-    "{version}",
-]
-
-"src/pygsk/__init__.py" = [
-    '__version__ = "{version}"',
-]

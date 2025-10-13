@@ -1,0 +1,21 @@
+[bumpver]
+version_pattern = "vMAJOR.MINOR.PATCH[PYTAGNUM]"
+current_version = "v0.1.5"
+commit_message = "bump version {old_version} → {new_version}"
+tag_message = "Release {new_version}"
+tag_scope = "default"
+tag_format = "{version}"  # Already includes 'v' via version_pattern
+commit = true
+tag = true
+push = true
+
+[bumpver.file_patterns]
+"pyproject.toml" = [
+    'version = "{version}"',
+]
+"src/pygsk/__init__.py" = [
+    '__version__ = "{version}"',
+]
+"CITATION.cff" = [
+    'version: {version}',
+]
