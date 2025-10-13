@@ -16,9 +16,12 @@ dependencies = [
     "scipy",
     "matplotlib"
 ]
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-include = ["pyGSK", "cli"]
+["pyGSK", "cli", "tests"]
+
 
 [project.optional-dependencies]
 dev = [
