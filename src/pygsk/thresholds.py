@@ -1,18 +1,75 @@
+"""
+Threshold computation for SK detection using Pearson Type III approximation.
+
+This module implements the numerical estimation of upper and lower SK thresholds
+based on higher-order moments of the SK distribution. It uses root-finding techniques
+to invert the incomplete gamma function and match a target false alarm probability (PFA).
+
+The implementation follows the analytical framework from Nita et al. (2016), adapted
+for reproducible SK validation and detection benchmarking.
+"""
+
 import numpy as np
 import scipy.optimize
 
 def upperRoot(x, moment_2, moment_3, pfa):
+    """
+    Objective function for computing the upper SK threshold via root finding.
+
+    This function inverts the Pearson Type III cumulative distribution function
+    to match the desired upper-tail false alarm probability.
+
+    Parameters:
+        x (float): Candidate SK threshold value.
+        moment_2 (float): Second central moment of the SK distribution.
+        moment_3 (float): Third central moment of the SK distribution.
+        pfa (float): One-sided false alarm probability.
+
+    Returns:
+        float: Absolute difference between target and achieved upper-tail probability.
+    """
     term = (-(moment_3 - 2 * moment_2 ** 2) / moment_3 + x) / (moment_3 / (2 * moment_2))
     return np.abs((1 - scipy.special.gammainc((4 * moment_2 ** 3) / moment_3 ** 2, term)) - pfa)
 
 def lowerRoot(x, moment_2, moment_3, pfa):
+    """
+    Objective function for computing the lower SK threshold via root finding.
+
+    This function inverts the Pearson Type III cumulative distribution function
+    to match the desired lower-tail false alarm probability.
+
+    Parameters:
+        x (float): Candidate SK threshold value.
+        moment_2 (float): Second central moment of the SK distribution.
+        moment_3 (float): Third central moment of the SK distribution.
+        pfa (float): One-sided false alarm probability.
+
+    Returns:
+        float: Absolute difference between target and achieved lower-tail probability.
+    """
     term = (-(moment_3 - 2 * moment_2 ** 2) / moment_3 + x) / (moment_3 / (2 * moment_2))
     return np.abs(scipy.special.gammainc((4 * moment_2 ** 3) / moment_3 ** 2, term) - pfa)
 
 def compute_sk_thresholds(M, N=1, d=1, pfa=0.0013499):
     """
-    Computes SK thresholds using Pearson Type III approximation.
+    Compute SK detection thresholds using Pearson Type III approximation.
     Based on Nita et al. 2016 and adapted from ETSmit's implementation.
+
+    This function estimates the second, third, and fourth moments of the SK distribution
+    and uses them to derive thresholds that bound the central (1 - 2*pfa) region.
+    It numerically solves for the SK values that yield the desired false alarm probability.
+
+    Parameters:
+        M (int): Number of frequency channels.
+        N (int, optional): Number of accumulations per channel. Default is 1.
+        d (float, optional): Scaling factor. Default is 1.
+        pfa (float, optional): One-sided false alarm probability. Default is 0.0013499.
+
+    Returns:
+        tuple:
+            lower (float): Lower SK detection threshold.
+            upper (float): Upper SK detection threshold.
+            std_sk (float): Theoretical standard deviation of SK under null hypothesis.
     """
     Nd = N * d * 1.0
 

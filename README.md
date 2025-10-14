@@ -28,28 +28,53 @@ You can install pyGSK via PyPI:
 
 ```bash
 pip install pyGSK
-
 ```
 
 ---
 
-## 🛠️ Usage Example
+## 🧪 Command-Line Interface
+
+pyGSK includes a CLI for running SK tests, threshold sweeps, and renormalization experiments. All subcommands support plotting, verbosity, and reproducible export.
+
+### Standard SK Test
+
+Run a Monte Carlo SK test with specified parameters:
 
 ```bash
-python -m pyGSK.cli.main renorm-sk-test \
-    --input your_data.npy \
-    --assumed_N 64 \
-    --plot \
-    --log_bins \
-    --log_x \
-    --save_path output.png
+python -m pyGSK.cli sk-test --M 128 --N 64 --alpha 0.001 --plot
 ```
 
-Use `--help` with any subcommand to see available options:
+### Threshold Sweep
+
+Sweep SK thresholds across a range of false alarm probabilities:
 
 ```bash
-python -m pyGSK.cli.main renorm-sk-test --help
+python -m pyGSK.cli threshold-sweep --range 0.0005 0.005 --steps 20 --plot --th
+```
 
+### Renormalized SK Test
+
+Compare raw and renormalized SK distributions under incorrect assumptions:
+
+```bash
+python -m pyGSK.cli renorm-sk-test --N 64 --assumed_N 1.0 --plot --save_path renorm.png
+```
+
+### Common Options
+
+All subcommands support the following shared arguments:
+
+- `--plot`: Display or save a histogram or detection curve
+- `--save_path`: Path to save the plot or result file
+- `--log_bins`, `--log_x`, `--log_count`: Enable log-scaled binning or axes
+- `--verbose`: Print detailed output
+- `--dpi`: Set plot resolution (default: 300)
+- `--transparent`: Save PNG with transparent background
+
+Use `--help` with any subcommand to view full options:
+
+```bash
+python -m pyGSK.cli sk-test --help
 ```
 
 ---

@@ -27,3 +27,8 @@ include = ["pyGSK", "cli", "tests"]
 "Homepage" = "https://github.com/SUNCAST-org/pyGSK"
 "Source" = "https://github.com/SUNCAST-org/pyGSK"
 "Bug Tracker" = "https://github.com/SUNCAST-org/pyGSK/issues"
+
+[project.scripts]
+pygsk = "pyGSK.cli.main:main"
+
+
