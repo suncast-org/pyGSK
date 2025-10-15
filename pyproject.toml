@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygsk"
-version = "v0.2.1"
+version = "v0.2.2"
 description = "Generalized Spectral Kurtosis Toolkit"
 authors = [
     { name = "Gelu M. Nita" }
