@@ -21,7 +21,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pygsk", "cli", "tests"]
+include = ["pygsk", "pygsk.*", "tests"]
 
 [project.urls]
 "Homepage" = "https://github.com/SUNCAST-org/pygsk"
