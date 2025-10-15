@@ -5,9 +5,9 @@ This module runs a parameterized sweep over alpha values, computes SK thresholds
 rates, and optionally visualizes the results. It supports log-scaled axes, threshold overlays,
 and reproducible export for benchmarking and pedagogical analysis.
 
-Intended for use via the `threshold-sweep` subcommand in pyGSK's main CLI.
+Intended for use via the `threshold-sweep` subcommand in pygsk's main CLI.
 """
-from pyGSK import core, plot
+from pygsk import core, plot
 import os
 
 def run(args):

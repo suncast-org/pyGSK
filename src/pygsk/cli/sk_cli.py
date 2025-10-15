@@ -5,9 +5,9 @@ This module validates user input, invokes the core SK test routine, and optional
 generates a histogram plot or saves results to disk. It supports verbose output,
 log-scaled plotting, and reproducible configuration via command-line arguments.
 
-Intended for use via the `sk-test` subcommand in pyGSK's main CLI.
+Intended for use via the `sk-test` subcommand in pygsk's main CLI.
 """
-from pyGSK import core, plot
+from pygsk import core, plot
 import os
 
 def run(args):

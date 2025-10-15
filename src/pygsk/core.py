@@ -1,5 +1,5 @@
 """
-Core SK computation and validation routines for pyGSK.
+Core SK computation and validation routines for pygsk.
 
 This module provides the primary statistical functions for computing the Spectral Kurtosis (SK)
 estimator, renormalizing it under incorrect assumptions, and validating its statistical behavior
@@ -10,8 +10,8 @@ rate estimation, supporting both pedagogical and scientific use cases.
 import numpy as np
 import scipy.special
 import scipy.optimize
-from pyGSK.plot import plot_sk_dual_histogram
-from pyGSK.thresholds import compute_sk_thresholds
+from pygsk.plot import plot_sk_dual_histogram
+from pygsk.thresholds import compute_sk_thresholds
 
 def get_sk(s1, s2, M, N=1, d=1):
     """
@@ -117,7 +117,7 @@ def run_sk_test(M=128, N=64, d=1.0, ns=10000, alpha=0.0013499, seed=42, plot=Fal
     )
 
     if plot:
-        from pyGSK.plot import plot_sk_histogram
+        from pygsk.plot import plot_sk_histogram
         plot_sk_histogram(sk, lower, upper, M, N, d, ns, alpha, below, above, total, save_path)
 
     return {
@@ -208,7 +208,7 @@ def run_renorm_sk_test(M=128, N=64, d=1.0, alpha= 0.0013499,
     )
 
     if plot:
-        from pyGSK.plot import plot_sk_dual_histogram
+        from pygsk.plot import plot_sk_dual_histogram
         plot_sk_dual_histogram(
         sk_raw=sk_raw, lower_raw=lower_raw, upper_raw=upper_raw, d_raw=1.0,
         sk_renorm=sk_renorm, lower_renorm=lower, upper_renorm=upper, d_empirical=d_empirical,

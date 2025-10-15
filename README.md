@@ -1,11 +1,11 @@
 ```markdown
-# pyGSK: Generalized Spectral Kurtosis Toolkit
+# pygsk: Generalized Spectral Kurtosis Toolkit
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17353872.svg)](https://doi.org/10.5281/zenodo.17353872)
 
-**pyGSK** is a modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. It provides command-line tools and plotting utilities for signal detection, statistical diagnostics, and pedagogical visualization of spectral data.
+**pygsk** is a modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. It provides command-line tools and plotting utilities for signal detection, statistical diagnostics, and pedagogical visualization of spectral data.
 
-Developed and maintained by [Gelu M. Nita](https://orcid.org/0000-0003-2846-2453), pyGSK builds upon the theoretical framework introduced in:
+Developed and maintained by [Gelu M. Nita](https://orcid.org/0000-0003-2846-2453), pygsk builds upon the theoretical framework introduced in:
 
 - Nita & Gary (2010), *The Generalized Spectral Kurtosis Estimator*, PASP 122, 595. [DOI: 10.1086/652409](https://doi.org/10.1086/652409)
 - Nita & Hellbourg (2020), *A Cross-Correlation Based Spectral Kurtosis RFI Detector*, IEEE RFI2020. [10.23919/URSIGASS49373.2020.9232200](https://ieeexplore.ieee.org/document/9232200)
@@ -24,24 +24,24 @@ Developed and maintained by [Gelu M. Nita](https://orcid.org/0000-0003-2846-2453
 
 ## 📦 Installation
 
-You can install pyGSK via PyPI:
+You can install pygsk via PyPI:
 
 ```bash
-pip install pyGSK
+pip install pygsk
 ```
 
 ---
 
 ## 🧪 Command-Line Interface
 
-pyGSK includes a CLI for running SK tests, threshold sweeps, and renormalization experiments. All subcommands support plotting, verbosity, and reproducible export.
+pygsk includes a CLI for running SK tests, threshold sweeps, and renormalization experiments. All subcommands support plotting, verbosity, and reproducible export.
 
 ### Standard SK Test
 
 Run a Monte Carlo SK test with specified parameters:
 
 ```bash
-python -m pyGSK.cli sk-test --M 128 --N 64 --alpha 0.001 --plot
+python -m pygsk.cli sk-test --M 128 --N 64 --alpha 0.001 --plot
 ```
 
 ### Threshold Sweep
@@ -49,7 +49,7 @@ python -m pyGSK.cli sk-test --M 128 --N 64 --alpha 0.001 --plot
 Sweep SK thresholds across a range of false alarm probabilities:
 
 ```bash
-python -m pyGSK.cli threshold-sweep --range 0.0005 0.005 --steps 20 --plot --th
+python -m pygsk.cli threshold-sweep --range 0.0005 0.005 --steps 20 --plot --th
 ```
 
 ### Renormalized SK Test
@@ -57,7 +57,7 @@ python -m pyGSK.cli threshold-sweep --range 0.0005 0.005 --steps 20 --plot --th
 Compare raw and renormalized SK distributions under incorrect assumptions:
 
 ```bash
-python -m pyGSK.cli renorm-sk-test --N 64 --assumed_N 1.0 --plot --save_path renorm.png
+python -m pygsk.cli renorm-sk-test --N 64 --assumed_N 1.0 --plot --save_path renorm.png
 ```
 
 ### Common Options
@@ -74,17 +74,17 @@ All subcommands support the following shared arguments:
 Use `--help` with any subcommand to view full options:
 
 ```bash
-python -m pyGSK.cli sk-test --help
+python -m pygsk.cli sk-test --help
 ```
 
 ---
 
 ## 📚 Citation
 
-If you use **pyGSK** in your research, please cite:
+If you use **pygsk** in your research, please cite:
 
-> Gelu M. Nita (2025), *pyGSK: Generalized Spectral Kurtosis Toolkit*.  
-> GitHub: [https://github.com/suncast-org/pyGSK](https://github.com/suncast-org/pyGSK)  
+> Gelu M. Nita (2025), *pygsk: Generalized Spectral Kurtosis Toolkit*.  
+> GitHub: [https://github.com/suncast-org/pygsk](https://github.com/suncast-org/pygsk)  
 >  
 > Theoretical foundations:  
 > - Nita & Gary (2010), PASP 122, 595. [DOI: 10.1086/652409](https://doi.org/10.1086/652409)  

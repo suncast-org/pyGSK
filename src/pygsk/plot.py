@@ -36,7 +36,7 @@ def plot_sk_histogram(
     log_bins=False, log_x=False, log_count=False,
     dpi=300, transparent=False
 ):
-     """
+    """
     Plot a histogram of SK values with annotated detection thresholds and false alarm rates.
 
     This visualization highlights the distribution of SK values, overlays detection thresholds,
@@ -65,9 +65,16 @@ def plot_sk_histogram(
 
     Returns:
         matplotlib.figure.Figure: The generated histogram figure.
-    """  
-    bins = np.logspace(np.log10(0.01), np.log10(3.0), 100) if log_bins else 100
-    xscale = "log" if log_bins else ("log" if log_x else "linear")
+    """
+    if log_bins:
+        bins = np.logspace(np.log10(0.01), np.log10(3.0), 100)
+        xscale = "log"
+    else:
+        bins = 100
+        if log_x:
+            xscale = "log"
+        else:
+            xscale = "linear"
 
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.hist(sk, bins=bins, density=True, alpha=0.6, label="SK distribution")
@@ -118,8 +125,7 @@ def plot_sk_dual_histogram(
     assumed_N=1.0,
     log_bins=False, log_x=False, log_count=False,
     save_path=None, show=True,
-    dpi=300, transparent=False
-):
+    dpi=300, transparent=False):
     """
     Plot side-by-side histograms comparing raw and renormalized SK distributions.
 

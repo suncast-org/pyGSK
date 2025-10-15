@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyGSK"
+name = "pygsk"
 version = "v0.2.0"
 description = "Generalized Spectral Kurtosis Toolkit"
 authors = [
@@ -21,14 +21,14 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pyGSK", "cli", "tests"]
+include = ["pygsk", "cli", "tests"]
 
 [project.urls]
-"Homepage" = "https://github.com/SUNCAST-org/pyGSK"
-"Source" = "https://github.com/SUNCAST-org/pyGSK"
-"Bug Tracker" = "https://github.com/SUNCAST-org/pyGSK/issues"
+"Homepage" = "https://github.com/SUNCAST-org/pygsk"
+"Source" = "https://github.com/SUNCAST-org/pygsk"
+"Bug Tracker" = "https://github.com/SUNCAST-org/pygsk/issues"
 
 [project.scripts]
-pygsk = "pyGSK.cli.main:main"
+pygsk = "pygsk.cli.main:main"
 
 

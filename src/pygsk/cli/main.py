@@ -1,17 +1,17 @@
 """
-Main CLI entry point for pyGSK.
+Main CLI entry point for pygsk.
 
 This module defines subcommands for running SK tests, threshold sweeps, and renormalization
 experiments. It parses shared and command-specific arguments, dispatches execution to
 dedicated CLI handlers, and supports plotting and reproducible configuration.
 
 Usage examples:
-    python -m pyGSK.cli sk-test --M 128 --N 64 --plot
-    python -m pyGSK.cli threshold-sweep --range 0.0005 0.005 --steps 20 --th
-    python -m pyGSK.cli renorm-sk-test --N 64 --assumed_N 1.0 --plot --save_path renorm.png
+    python -m pygsk.cli sk-test --M 128 --N 64 --plot
+    python -m pygsk.cli threshold-sweep --range 0.0005 0.005 --steps 20 --th
+    python -m pygsk.cli renorm-sk-test --N 64 --assumed_N 1.0 --plot --save_path renorm.png
 """
 import argparse
-from pyGSK.cli import sk_cli, sweep_cli, renorm_sk_cli
+from pygsk.cli import sk_cli, sweep_cli, renorm_sk_cli
 
 # Step 1: Define shared arguments in a base parser
 base_parser = argparse.ArgumentParser(add_help=False)
@@ -31,8 +31,8 @@ base_parser.add_argument("--dpi", type=int, default=300, help="DPI for saved plo
 base_parser.add_argument("--transparent", action="store_true", help="Save plots with transparent background")
 
 # Step 2: Create main parser and subparsers
-main_parser = argparse.ArgumentParser(description="pyGSK CLI")
-main_parser.add_argument("--version", action="version", version="pyGSK 1.0.0")
+main_parser = argparse.ArgumentParser(description="pygsk CLI")
+main_parser.add_argument("--version", action="version", version="pygsk 1.0.0")
 subparsers = main_parser.add_subparsers(dest="command", required=True)
 
 # Step 3: Attach base_parser to each subcommand

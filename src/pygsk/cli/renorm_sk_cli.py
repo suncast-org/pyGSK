@@ -5,9 +5,9 @@ This module executes the renormalized SK test using synthetic gamma-distributed 
 recovers an empirical correction factor, and compares raw versus renormalized SK distributions.
 It supports optional plotting, log-scaled axes, and result export for reproducibility.
 
-Intended for use via the `renorm-sk-test` subcommand in pyGSK's main CLI.
+Intended for use via the `renorm-sk-test` subcommand in pygsk's main CLI.
 """
-from pyGSK import core, plot
+from pygsk import core, plot
 import os
 
 def run(args):
