@@ -1,8 +1,70 @@
+# ===========================
+# Core Python ignores
+# ===========================
 __pycache__/
-*.pyc
-.pytest_cache/
-*.egg-info/
-*.log
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# ===========================
+# Build artifacts
+# ===========================
+build/
 dist/
+*.egg-info/
+.eggs/
+*.whl
+*.egg
+*.manifest
+*.spec
+
+# ===========================
+# Testing & coverage
+# ===========================
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# ===========================
+# IDEs & Editors
+# ===========================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ===========================
+# OS-specific
+# ===========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ===========================
+# Virtual environments
+# ===========================
+.env
+.venv
+env/
+venv/
+ENV/
+conda-env/
+*.conda
+*.yaml
+*.yml
+
+# ===========================
+# Project-specific
+# ===========================
+*.log
 *.html
 render_readme.py
+preview.html
+bumpver.toml.backup
+tools/*
+site/ 
