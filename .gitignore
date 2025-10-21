@@ -66,5 +66,11 @@ conda-env/
 render_readme.py
 preview.html
 bumpver.toml.backup
-tools/*
+tools/
 site/ 
+
+# Allow GitHub Actions workflows
+!.github/
+!.github/workflows/
+!.github/**/*.yml
+
