@@ -1,7 +1,8 @@
 {
-  "title": "Generalized Spectral Kurtosis toolkit",
+  "title": "pyGSK: Generalized Spectral Kurtosis Toolkit",
+  "version": "0.2.2",
   "upload_type": "software",
-  "description": "A modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. Built upon the theoretical framework introduced in Nita & Gary (2010, PASP 122, 595) and the renormalization logic from Nita & Hellbourg (2020, IEEE RFI2020), pyGSK provides thresholding, cross-correlation diagnostics, and pedagogical plotting for signal detection in spectral data.",
+  "description": "pyGSK is a modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. Built upon the theoretical framework introduced in Nita & Gary (2010, MNRAS Letters 406, L60–L64) and the renormalization logic from Nita & Hellbourg (2020, IEEE RFI2020), pyGSK provides thresholding, cross-correlation diagnostics, and pedagogical plotting for signal detection in spectral data.",
   "creators": [
     {
       "name": "Nita, Gelu M.",
@@ -10,13 +11,16 @@
     }
   ],
   "license": "MIT",
+  "access_right": "open",
   "keywords": [
     "Spectral Kurtosis",
     "signal detection",
     "radio astronomy",
     "statistical diagnostics",
     "open science",
-    "RFI mitigation"
+    "RFI mitigation",
+    "solar physics",
+    "software toolkit"
   ],
   "related_identifiers": [
     {
@@ -25,7 +29,7 @@
       "resource_type": "publication"
     },
     {
-      "identifier": "https://ieeexplore.ieee.org/document/9232200",
+      "identifier": "10.1109/RFI49542.2020.9232200",
       "relation": "isReferencedBy",
       "resource_type": "publication"
     },
@@ -33,6 +37,18 @@
       "identifier": "https://github.com/suncast-org/pyGSK",
       "relation": "isSupplementTo",
       "resource_type": "software"
-    }
-  ]
+    },
+    {
+      "identifier": "https://doi.org/10.5281/zenodo.17336193",
+      "relation": "isAlternateIdentifier",
+      "resource_type": "dataset"
+    },
+	{
+	"identifier": "https://suncast-org.github.io/pyGSK/",	
+    "relation": "isDocumentedBy"
+	}
+  ],
+  "language": "eng",
+  "publication_date": "2025-10-13",
+  "notes": "Versioning is managed automatically by Zenodo from GitHub release tags (v*)."
 }
