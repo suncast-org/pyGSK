@@ -1,6 +1,6 @@
 {
   "title": "pyGSK: Generalized Spectral Kurtosis Toolkit",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "upload_type": "software",
   "description": "pyGSK is a modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. Built upon the theoretical framework introduced in Nita & Gary (2010, MNRAS Letters 406, L60–L64) and the renormalization logic from Nita & Hellbourg (2020, IEEE RFI2020), pyGSK provides thresholding, cross-correlation diagnostics, and pedagogical plotting for signal detection in spectral data.",
   "creators": [

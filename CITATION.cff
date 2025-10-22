@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use pygsk in your research, please cite this file."
 title: "pyGSK: Generalized Spectral Kurtosis Toolkit"
-version: 1.0.1  # bumpver
+version: 1.0.3  # bumpver
 doi: 10.5281/zenodo.17336193   # concept DOI (all versions)
 url: https://suncast-org.github.io/pyGSK/
 date-released: 2025-10-21
