@@ -4,11 +4,9 @@ current_version = "1.0.3"
 
 commit_message = "bump: release v{new_version}"
 tag_message    = "Release v{new_version}"
-
-# Create v-prefixed tags
-tag_name  = "v{new_version}"
-# Recognize v-prefixed tags (so “Latest version from VCS tag” picks them up)
-tag_regex = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+tag_name       = "v{new_version}"
+# NEW: accept vX.Y.Z or X.Y.Z when scanning existing tags
+tag_regex      = "^(v)?(?P<version>\\d+\\.\\d+\\.\\d+)$"
 
 commit = true
 tag    = true
@@ -20,3 +18,4 @@ allow_dirty = false
 "src/pygsk/__init__.py" = ['__version__ = "{version}"']
 "CITATION.cff" = ['version: {version}  # bumpver']
 ".zenodo.json" = ['"version": "{version}"']
+
