@@ -1,112 +1,120 @@
-```markdown
 # pygsk: Generalized Spectral Kurtosis Toolkit
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17360766.svg)](https://doi.org/10.5281/zenodo.17360766)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17336193.svg)](https://doi.org/10.5281/zenodo.17336193)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/suncast-org/pyGSK/blob/master/LICENSE)
+[![Python](https://img.shields.io/badge/Python-≥3.9-blue?logo=python)](https://www.python.org/)
+[![PyPI](https://img.shields.io/pypi/v/pygsk.svg)](https://pypi.org/project/pygsk/)
+[![Docs Build](https://github.com/suncast-org/pyGSK/actions/workflows/docs.yml/badge.svg)](https://suncast-org.github.io/pyGSK/)
+[![GitHub Pages](https://img.shields.io/badge/docs-latest-blue?logo=github)](https://suncast-org.github.io/pyGSK/)
 
-**pygsk** is a modular, open-source Python toolkit for computing and visualizing the Generalized Spectral Kurtosis (SK) estimator. It provides command-line tools and plotting utilities for signal detection, statistical diagnostics, and pedagogical visualization of spectral data.
-
-Developed and maintained by [Gelu M. Nita](https://orcid.org/0000-0003-2846-2453), pygsk builds upon the theoretical framework introduced in:
-
-- Nita & Gary (2010), *The Generalized Spectral Kurtosis Estimator*, PASP 122, 595. [DOI: 10.1086/652409](https://doi.org/10.1086/652409)
-- Nita & Hellbourg (2020), *A Cross-Correlation Based Spectral Kurtosis RFI Detector*, IEEE RFI2020. [10.23919/URSIGASS49373.2020.9232200](https://ieeexplore.ieee.org/document/9232200)
-
----
-
-## 🚀 Features
-
-- Renormalized SK estimation with inferred or user-supplied parameters
-- Dual-panel histogram visualization (raw vs renormalized SK)
-- Threshold computation and false alarm probability (PFA) reporting
-- Log-scaled binning and axis control for pedagogical clarity
-- CLI-driven analysis with reproducible output and export options
+[**→ View full documentation**](https://suncast-org.github.io/pyGSK/)
 
 ---
 
-## 📦 Installation
+## Overview
 
-You can install pygsk via PyPI:
+**pyGSK** is a modular, open-source Python toolkit for computing and visualizing the **Generalized Spectral Kurtosis (SK)** estimator — a statistical tool for signal detection, RFI excision, and spectral diagnostics.  
+It provides both programmatic and command-line interfaces for reproducible, open-science workflows.
+
+Developed within the **[SUNCAST](https://github.com/suncast-org)** collaboration, pyGSK modernizes the legacy IDL implementation of the SK estimator into a fully transparent and community-maintained Python package.
+
+---
+
+## Key Features
+
+- ⚙️ Compute SK statistics for arbitrary integration parameters (`M`, `N`, `d`)
+- 🧮 Derive **PFA-based detection thresholds** and visualize their evolution
+- 📊 Plot SK distributions and detection boundaries
+- 💻 Command-line interface (`pygsk`) with subcommands:
+  - `sk-test` — compute and visualize SK thresholds
+  - `threshold-sweep` — sweep thresholds over PFA ranges
+  - `renorm-sk-test` — use the renormalized SK estimator
+- 🔬 Pedagogical and reproducible: designed as a SUNCAST reference implementation
+
+---
+
+## Installation
+
+Install the latest stable version from PyPI:
 
 ```bash
 pip install pygsk
 ```
 
----
-
-## 🧪 Command-Line Interface
-
-pygsk includes a CLI for running SK tests, threshold sweeps, and renormalization experiments. All subcommands support plotting, verbosity, and reproducible export.
-
-### Standard SK Test
-
-Run a Monte Carlo SK test with specified parameters:
+To verify the installation:
 
 ```bash
-python -m pygsk.cli sk-test --M 128 --N 64 --alpha 0.001 --plot
+python -m pygsk --version
 ```
 
-### Threshold Sweep
-
-Sweep SK thresholds across a range of false alarm probabilities:
+For the latest development version:
 
 ```bash
-python -m pygsk.cli threshold-sweep --range 0.0005 0.005 --steps 20 --plot --th
+pip install git+https://github.com/suncast-org/pygsk.git
 ```
 
-### Renormalized SK Test
+---
 
-Compare raw and renormalized SK distributions under incorrect assumptions:
+## Quick Example
+
+```python
+from pygsk.thresholds import compute_sk_thresholds
+
+M, N, d, pfa = 128, 64, 1.0, 1e-3
+lower, upper = compute_sk_thresholds(M, N, d, pfa=pfa)
+
+print(f"SK thresholds for pfa={pfa}: lower={lower:.3f}, upper={upper:.3f}")
+```
+
+Or equivalently from the command line:
 
 ```bash
-python -m pygsk.cli renorm-sk-test --N 64 --assumed_N 1.0 --plot --save_path renorm.png
-```
-
-### Common Options
-
-All subcommands support the following shared arguments:
-
-- `--plot`: Display or save a histogram or detection curve
-- `--save_path`: Path to save the plot or result file
-- `--log_bins`, `--log_x`, `--log_count`: Enable log-scaled binning or axes
-- `--verbose`: Print detailed output
-- `--dpi`: Set plot resolution (default: 300)
-- `--transparent`: Save PNG with transparent background
-
-Use `--help` with any subcommand to view full options:
-
-```bash
-python -m pygsk.cli sk-test --help
+pygsk sk-test --M 128 --N 64 --pfa 1e-3 --plot
 ```
 
 ---
 
-## 📚 Citation
+## Documentation
 
-If you use **pygsk** in your research, please cite:
+Full documentation is available in the [`docs/`](docs) directory:
 
-> Gelu M. Nita (2025), *pygsk: Generalized Spectral Kurtosis Toolkit*.  
-> GitHub: [https://github.com/suncast-org/pygsk](https://github.com/suncast-org/pygsk)  
->  
-> Theoretical foundations:  
-> - Nita & Gary (2010), PASP 122, 595. [DOI: 10.1086/652409](https://doi.org/10.1086/652409)  
-> - Nita & Hellbourg (2020), IEEE RFI2020. [DOI: 10.1109/RFI49542.2020.9232200](https://ieeexplore.ieee.org/document/9232200)
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
+| File | Description |
+|------|--------------|
+| [index.md](docs/index.md) | Project overview and citation |
+| [install.md](docs/install.md) | Installation instructions |
+| [usage.md](docs/usage.md) | Example usage in Python and CLI |
+| [cli_guide.md](docs/cli_guide.md) | Command-line reference |
+| [theory.md](docs/theory.md) | Theoretical background |
+| [dev_guide.md](docs/dev_guide.md) | Internal structure and contribution guide |
+| [dev_workflow.md](docs/dev_workflow.md) | Development and release workflow |
 
 ---
 
-## 👤 Author
+## Citation
 
-**Gelu M. Nita**  
-New Jersey Institute of Technology  
-ORCID: [0000-0003-2846-2453](https://orcid.org/0000-0003-2846-2453)
+If you use **pyGSK** in your research, please cite:
+
+> Nita, G. M. (2025). *pyGSK: Generalized Spectral Kurtosis Toolkit.* Zenodo.  
+> [https://doi.org/10.5281/zenodo.17336193](https://doi.org/10.5281/zenodo.17336193)
+
+This **concept DOI** represents all versions and always resolves to the latest release.
+
+The theoretical foundation is described in:
+
+> Nita, G. M., & Gary, D. E. (2010). *The Generalized Spectral Kurtosis Estimator.*  
+> **MNRAS Letters**, 406(1), L60–L64.  
+> [https://doi.org/10.1111/j.1745-3933.2010.00882.x](https://doi.org/10.1111/j.1745-3933.2010.00882.x)
 
 ---
 
-## 🤝 Contributions
+## License
 
-Contributions, feedback, and issue reports are welcome. Please open a pull request or submit an issue on GitHub.
-```
+This project is distributed under the [MIT License](LICENSE).  
+© 2025 Gelu M. Nita and the SUNCAST Collaboration.
+
+---
+
+## Acknowledgment
+
+**pyGSK** was developed within the **GEO OSE Track 1: SUNCAST: Software Unified Collaboration for Advancing Solar Tomography** project, funded by the U.S. National Science Foundation (Award No. RISE-2324724).  
+It serves as a pedagogical and technical template for future SUNCAST community contributions supporting open, reproducible, and FAIR solar data analysis.

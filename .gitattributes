@@ -1,0 +1,68 @@
+# ===========================
+# Default: normalize to LF in repo
+# ===========================
+* text=auto eol=lf
+
+# ---------------------------
+# Source code & docs (LF)
+# ---------------------------
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.toml  text eol=lf
+*.ini   text eol=lf
+*.cfg   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.rst   text eol=lf
+*.txt   text eol=lf
+*.ipynb text eol=lf
+*.csv   text eol=lf
+*.tsv   text eol=lf
+
+# ---------------------------
+# Shell / scripts
+# ---------------------------
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# Windows scripts (keep CRLF on checkout for native tooling)
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# ---------------------------
+# Binary data (no EOL changes)
+# ---------------------------
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.tif   binary
+*.tiff  binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.bz2   binary
+*.xz    binary
+*.7z    binary
+*.npz   binary
+*.npy   binary
+*.pkl   binary
+# IDL save files
+*.sav   binary        
+*.fits  binary
+*.fit   binary
+*.fz    binary        
+# FITS tile-compressed
+*.whl   binary
+
+# ---------------------------
+# Build artifacts
+# ---------------------------
+*.egg   binary
+*.egg-info/* -text
+dist/*  -text
+build/* -text
+.eggs/* -text

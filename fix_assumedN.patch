@@ -1,0 +1,25 @@
+cat > fix_assumedN.patch << 'EOF'
+--- a/pygsk/core.py
++++ b/pygsk/core.py
+@@
+-def renorm_sk(s1, s2, M, d=1.0):
++def renorm_sk(s1, s2, M, d=1.0, assumed_N=1.0):
+@@
+-    sk_raw = get_sk(s1, s2, M)
++    # Compute raw SK using the (possibly wrong) assumed_N
++    sk_raw = get_sk(s1, s2, M, N=assumed_N)
+     mode = np.median(sk_raw.flatten())
+     d_empirical = (M - mode + 1) / (mode * M)
+-    sk_renorm = get_sk(s1, s2, M, d=d_empirical)
++    # Renormalize using the same assumed_N
++    sk_renorm = get_sk(s1, s2, M, N=assumed_N, d=d_empirical)
+     return d_empirical, sk_renorm
+@@
+-    print(f"\nRunning renormalized SK test with M = {M}, N = {N}, ns = {ns} under the wrong assumption that N=1")
++    print(f"\nRunning renormalized SK test with M = {M}, N = {N}, ns = {ns} under the wrong assumption that N={assumed_N}")
+@@
+-    d_empirical, sk_renorm = renorm_sk(s1, s2, M, d=d)
+-    sk_raw = get_sk(s1, s2, M, d=1.0)
++    d_empirical, sk_renorm = renorm_sk(s1, s2, M, d=d, assumed_N=assumed_N)
++    sk_raw = get_sk(s1, s2, M, N=assumed_N, d=1.0)
+EOF
