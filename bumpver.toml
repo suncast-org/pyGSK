@@ -1,10 +1,9 @@
-[bumpver]
+[tool.bumpver]
 version_pattern = "MAJOR.MINOR.PATCH"
 current_version = "1.0.1"
-commit_message = "bump version {old_version} → {new_version}"
+commit_message = "bump: release v{new_version}"
 tag_message = "Release v{new_version}"
-tag_scope = "default"
-tag_format = "v{version}"
+tag_name = "v{new_version}"   # <-- ensures v-prefix
 commit = true
 tag = true
 push = true
