@@ -1,8 +1,8 @@
 site_name: pyGSK — Generalized Spectral Kurtosis Toolkit
 site_description: Documentation for pyGSK, a toolkit for computing and visualizing the Generalized Spectral Kurtosis estimator.
-site_url: https://suncast-org.github.io/pygsk/
-repo_url: https://github.com/suncast-org/pygsk
-edit_uri: edit/master/docs/   # branch is 'master' in your repo
+site_url: https://suncast-org.github.io/pyGSK/    
+repo_url: https://github.com/suncast-org/pyGSK     
+edit_uri: edit/master/docs/
 
 docs_dir: docs
 site_dir: site
@@ -52,3 +52,8 @@ markdown_extensions:
 
 plugins:
   - search
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+use_directory_urls: false

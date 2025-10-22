@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CLI: Renormalized SK test (consistent 'sk-*' naming).
+CLI: Renormalized SK test.
 
 - Enforces integer --assumed-N (defaults to --N)
 - Optional --tolerance for assertion in core (defaults to 0.5)
@@ -9,14 +9,14 @@ CLI: Renormalized SK test (consistent 'sk-*' naming).
     - core.renorm_sk_test(...)       (alt name)
   Uses introspection to pass only supported kwargs.
 
-- Plots via pygsk.plot.plot_sk_histogram (same style as sk_cli.py).
+- Produces a dual histogram when --plot is used.
 """
 
 from __future__ import annotations
 import argparse
 import inspect
 
-from pygsk import core, plot
+from pygsk import core
 
 
 COMMAND = "sk-renorm-test"
@@ -85,7 +85,6 @@ def _call_core_renorm(args):
         "`core.run_renorm_sk_test(...)` or `core.renorm_sk_test(...)`."
     )
 
-
 def run(args):
     if args.verbose:
         print("🧪 Renormalized SK test CLI invoked.")
@@ -110,29 +109,7 @@ def run(args):
     # Dispatch to core implementation (kwargs filtered by signature)
     result = _call_core_renorm(args)
 
-    # Optional plotting — reuse the same histogram style as standard SK CLI
-    if getattr(args, "plot", False):
-        plot.plot_sk_histogram(
-            sk=result["sk"],
-            lower=result["lower"],
-            upper=result["upper"],
-            M=args.M,
-            N=args.N,
-            d=args.d,
-            ns=args.ns,
-            pfa=args.pfa,
-            below=result["below"],
-            above=result["above"],
-            total=result["total"],
-            save_path=args.save_path,
-            show=not args.save_path,
-            log_bins=getattr(args, "log_bins", False),
-            log_x=getattr(args, "log_x", False),
-            log_count=getattr(args, "log_count", False),
-            dpi=args.dpi,
-            transparent=args.transparent,
-        )
-
+    
     if args.verbose:
         print("✅ Renormalized SK test completed.")
 
