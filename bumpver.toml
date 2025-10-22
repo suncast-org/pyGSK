@@ -2,26 +2,18 @@
 version_pattern = "MAJOR.MINOR.PATCH"
 current_version = "1.0.2"
 commit_message = "bump: release v{new_version}"
-tag_message = "Release v{new_version}"
-tag_name = "v{new_version}"   # <-- ensures v-prefix
+tag_message    = "Release v{new_version}"
+tag_name       = "v{new_version}"
 commit = true
-tag = true
-push = true
+tag    = true
+push   = true
 allow_dirty = false
 
-[bumpver.file_patterns]
-"pyproject.toml" = [
-  'version = "{version}"',
-]
-"src/pygsk/__init__.py" = [
-  '__version__ = "{version}"',
-]
-"CITATION.cff" = [
-  'version: {version}  # bumpver',
-]
+[tool.bumpver.file_patterns]
+"pyproject.toml" = ['version = "{version}"']
+"src/pygsk/__init__.py" = ['__version__ = "{version}"']
+"CITATION.cff" = ['version: {version}  # bumpver']
+".zenodo.json" = ['"version": "{version}"']
 
-".zenodo.json" = [
-  '"version": "{version}"',
-]
 
 
