@@ -1,6 +1,6 @@
 [tool.bumpver]
 version_pattern = "MAJOR.MINOR.PATCH"
-current_version = "1.0.10"
+current_version = "1.0.12"
 commit_message = "bump: release v{new_version}"
 tag_message    = "Release v{new_version}"
 tag_name       = "v{version}"
