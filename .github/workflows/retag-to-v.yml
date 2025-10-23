@@ -2,21 +2,21 @@ name: Retag numeric tag to v-tag
 
 on:
   push:
-    tags: ['*.*.*']   # still broad, will match 1.2.3 and v1.2.3
+    tags: ['*.*.*']
 
 permissions:
   contents: write
 
 jobs:
   retag:
-    # ❗ Only run if the tag DOESN'T already start with 'v'
-    if: ${{ !startsWith(github.ref_name, 'v') }}
+    if: ${{ !startsWith(github.ref_name, 'v') }}   # guard against vv...
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history for tags)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false   # 🔴 IMPORTANT: don't keep GITHUB_TOKEN creds
 
       - name: Extract numeric tag
         id: info
@@ -28,15 +28,15 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           COMMIT=$(git rev-list -n 1 "${{ steps.info.outputs.TAG }}")
-          # Safe prefix (no double-v): v${TAG#v}
-          NEW="v${{ steps.info.outputs.TAG }}"
-          git tag -a "$NEW" -m "Release $NEW" "$COMMIT" || true
+          git tag -a "v${{ steps.info.outputs.TAG }}" -m "Release v${{ steps.info.outputs.TAG }}" "$COMMIT" || true
 
       - name: Push v-tag with PAT (triggers downstream workflows)
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}       # you created this
           REPO: ${{ github.repository }}
         run: |
           set -e
           git remote set-url origin "https://x-access-token:${GH_PAT}@github.com/${REPO}.git"
           git push origin "v${{ steps.info.outputs.TAG }}"
+          # optional: cleanup numeric
+          # git push origin :refs/tags/${{ steps.info.outputs.TAG }} || true
