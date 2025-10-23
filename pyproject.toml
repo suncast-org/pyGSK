@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygsk"
-version = "1.0.5"  # PEP 440 (no leading 'v')
+version = "1.0.6"  # PEP 440 (no leading 'v')
 description = "Generalized Spectral Kurtosis Toolkit"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "MIT" }
