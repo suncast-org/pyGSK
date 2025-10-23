@@ -1,23 +1,34 @@
-# .github/workflows/retag-to-v.yml
 name: Retag numeric tag to v-tag
+
 on:
   push:
-    tags: ['*.*.*']
+    tags: ['*.*.*']  # numeric tags only (won't fire for v1.2.3)
+
 permissions:
   contents: write
+
 jobs:
   retag:
     runs-on: ubuntu-latest
     steps:
-      - name: Extract tag
+      - name: Checkout (full history for tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract numeric tag
         id: info
         run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
       - name: Create v-prefixed tag at same commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --tags --force
-          # Dereference numeric tag to the commit:
           COMMIT=$(git rev-list -n 1 "${{ steps.info.outputs.TAG }}")
-          git tag -a "v${{ steps.info.outputs.TAG }}" -m "Release v${{ steps.info.outputs.TAG }}" "$COMMIT"
-          git push origin "v${{ steps.info.outputs.TAG }}"
+          git tag -a "v${{ steps.info.outputs.TAG }}" -m "Release v${{ steps.info.outputs.TAG }}" "$COMMIT" || true
+          git push origin "v${{ steps.info.outputs.TAG }}" || true
+
+      # Optional: remove the numeric tag from the remote to reduce confusion
+      - name: (Optional) Delete numeric tag on remote
+        run: |
+          git push origin :refs/tags/${{ steps.info.outputs.TAG }} || true

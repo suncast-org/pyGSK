@@ -1,13 +1,10 @@
 [tool.bumpver]
 version_pattern = "MAJOR.MINOR.PATCH"
 current_version = "1.0.5"
-
 commit_message = "bump: release v{new_version}"
 tag_message    = "Release v{new_version}"
 tag_name       = "v{new_version}"
-# NEW: accept vX.Y.Z or X.Y.Z when scanning existing tags
-tag_regex      = "^(v)?(?P<version>\\d+\\.\\d+\\.\\d+)$"
-
+tag_regex      = "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
 commit = true
 tag    = true
 push   = true
