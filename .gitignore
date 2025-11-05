@@ -74,3 +74,45 @@ site/
 !.github/workflows/
 !.github/**/*.yml
 !mkdocs.yml
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.egg-info/
+*.egg
+.eggs/
+
+# Build artifacts
+build/
+dist/
+.wheelhouse/
+
+# Test / coverage / linters
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*_checkpoint.ipynb
+
+# Local figs & scratch
+_figs/
+*.png
+*.csv
+
+# MkDocs local build (use GH Action to publish)
+site/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+

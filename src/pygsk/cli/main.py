@@ -3,33 +3,41 @@
 Main CLI entry point for pygsk.
 
 Public subcommands:
-  • sk-test          — simulate SK and (optionally) plot histogram + thresholds
-  • thresholds       — compute/print SK detection thresholds (table/CSV/JSON)
-  • threshold-sweep  — sweep PFA thresholds across a range and summarize/plot
-  • sk-renorm-test   — SK test with an assumed N used for raw-thresholding
-
-Examples:
-  pygsk sk-test --M 128 --N 64 --pfa 1e-3 --plot
-  pygsk thresholds --M 128 --N 64 --d 1 --pfa 1e-4 5e-4 1e-3 --json
-  pygsk threshold-sweep --pfa-range 5e-4 5e-3 --steps 20 --th --plot --save_path sweep.png
-  pygsk sk-renorm-test --N 64 --assumed-N 48 --plot
+  • simulate
+  • sk-test
+  • sk-thresholds
+  • sk-thresholds-sweep
+  • sk-renorm-test
 """
 
 from __future__ import annotations
-
 import argparse
-class _SmartFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
-    """Preserve newlines (RawText) while still showing defaults."""
-    pass
-
 from importlib.metadata import version, PackageNotFoundError
-
-# Subcommand modules (each may expose add_args(parser) and must expose run(args))
+import numpy as np
+# Subcommand modules
 from pygsk.cli import sk_cli, sk_thresholds_cli, sk_thresholds_sweep_cli, sk_renorm_cli
 
-# ---------------------------
-# Helpers: types & validators
-# ---------------------------
+
+# ---------- Helpers ----------
+class _SmartFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
+    pass
+
+
+def _get_simulator_funcs():
+    import importlib
+    mod = importlib.import_module("pygsk.simulator")
+    try:
+        sim_fn = getattr(mod, "simulate")
+        ql_fn = getattr(mod, "quicklook")
+    except AttributeError:
+        available = [n for n in dir(mod) if not n.startswith("_")]
+        raise SystemExit(
+            "pygsk.simulator is present but does not export 'simulate'/'quicklook'.\n"
+            f"Available names: {available}\n"
+            "Ensure src/pygsk/simulator.py defines simulate(...) and quicklook(...)."
+        )
+    return sim_fn, ql_fn
+
 
 def _positive_int(name: str):
     def _t(v: str) -> int:
@@ -41,6 +49,7 @@ def _positive_int(name: str):
             raise argparse.ArgumentTypeError(f"{name} must be > 0")
         return iv
     return _t
+
 
 def _positive_float(name: str, allow_eq: bool = False):
     def _t(v: str) -> float:
@@ -57,15 +66,16 @@ def _positive_float(name: str, allow_eq: bool = False):
         return fv
     return _t
 
+
 def _pfa_type(v: str) -> float:
     try:
         fv = float(v)
     except ValueError:
         raise argparse.ArgumentTypeError("pfa must be a float")
-    # one-sided thresholds: (0, 0.5)
     if not (0.0 < fv < 0.5):
         raise argparse.ArgumentTypeError("pfa must be in (0, 0.5) for one-sided thresholds")
     return fv
+
 
 def _get_version() -> str:
     try:
@@ -74,35 +84,34 @@ def _get_version() -> str:
         return "unknown"
 
 
-# ---------------------------
-# Parsers
-# ---------------------------
-
+# ---------- Base (shared for SK-related subcommands only) ----------
 def _build_base_parser() -> argparse.ArgumentParser:
     base = argparse.ArgumentParser(add_help=False)
     base.add_argument("--M", type=_positive_int("M"), default=128,
                       help="Number of accumulations per channel (>=2 in practice).")
     base.add_argument("--N", type=_positive_int("N"), default=64,
-                      help="Number of frequency/time samples per estimate.")
+                      help="Number of accumulations contributing to a single SK estimate.")
     base.add_argument("--d", type=_positive_float("d"), default=1.0,
-                      help="Shape parameter (gamma family); must be > 0.")
+                      help="Gamma scale parameter (background); must be > 0.")
     base.add_argument("--seed", type=int, default=42,
                       help="Random seed for reproducibility.")
     base.add_argument("--pfa", type=_pfa_type, default=0.0013499,
-                      help="One-sided probability of false alarm in (0,0.5).")
+                      help="One-sided probability of false alarm in (0, 0.5).")
     base.add_argument("--ns", type=_positive_int("ns"), default=10000,
-                      help="Number of simulated SK samples.")
-    # plotting & output
+                      help="Number of simulated raw time samples.")
     base.add_argument("--plot", action="store_true",
-                      help="Generate a plot for the result (if supported by subcommand).")
-    base.add_argument("--log_bins", action="store_true",
-                      help="Use logarithmic binning for SK histograms.")
-    base.add_argument("--log_x", action="store_true",
-                      help="Log-scale the x-axis (SK values).")
+                      help="Generate a plot for the result (if supported).")
+    base.add_argument("--no-log_x", dest="log_x", action="store_false",
+                      help="Disable log-scale on the x-axis (SK). Default: ON.")
+    base.add_argument("--no-log_bins", dest="log_bins", action="store_false",
+                      help="Disable logarithmic binning for SK histograms. Default: ON.")
+    base.set_defaults(log_x=True, log_bins=True)
     base.add_argument("--log_count", action="store_true",
-                      help="Log-scale the count axis (y-axis).")
+                      help="Log-scale the count axis (y-axis). Default: OFF.")
+    base.add_argument("--no-context", "--no_context", dest="no_context", action="store_true",
+                    help="Plot histograms only (no 2×2 context panels).")                 
     base.add_argument("--save_path", type=str, default=None,
-                      help="Path to save figure (implies writing a file if plotting).")
+                      help="Path to save figure/results (format by extension).")
     base.add_argument("--dpi", type=_positive_int("dpi"), default=300,
                       help="DPI for saved plots.")
     base.add_argument("--transparent", action="store_true",
@@ -110,45 +119,154 @@ def _build_base_parser() -> argparse.ArgumentParser:
     base.add_argument("--verbose", action="store_true",
                       help="Enable detailed output.")
     base.add_argument("--json", action="store_true",
-                      help="Output results in JSON format to stdout.")
+                      help="Output results in JSON to stdout (if supported by subcommand).")
     return base
 
 
+# ---------- simulate subcommand (raw-power only; no legacy SK args) ----------
+def _add_simulator_args(sub: argparse.ArgumentParser):
+    sub.add_argument("--ns", type=_positive_int("ns"), required=True,
+                     help="Number of raw time samples.")
+    sub.add_argument("--nf", type=_positive_int("nf"), default=1,
+                     help="Number of frequency bins (1 => lightcurve).")
+    sub.add_argument("--N", type=_positive_int("N"), required=True,
+                     help="True Gamma shape (background).")
+    sub.add_argument("--d", type=_positive_float("d"), default=1.0,
+                     help="True Gamma scale (background).")
+    sub.add_argument("--time-start", type=str, default=None,
+                     help="ISO-8601 start time.")
+    sub.add_argument("--dt", type=_positive_float("dt"), default=1.0,
+                     help="Seconds per raw sample.")
+    sub.add_argument("--freq-start", type=float, default=None,
+                     help="Start frequency [Hz].")
+    sub.add_argument("--df", type=float, default=None,
+                     help="Frequency bin width [Hz].")
+
+    # ---- Contamination modes ----
+    sub.add_argument("--mode", choices=["noise", "burst", "drift"], default="noise",
+                     help="Injected signal model to simulate.")
+
+    # --- Burst parameters ---
+    sub.add_argument("--burst-amp", type=float, default=6.0,
+                     help="Burst amplitude multiplier (mode=burst).")
+    sub.add_argument("--burst-frac", "--burst-fraction", dest="burst_frac", type=float, default=0.1,
+                     help="Burst fractional FWHM in time, 0..1 (mode=burst).")
+    sub.add_argument("--burst-center", type=float, default=None,
+                     help="Burst center (sample index, mode=burst).")
+
+    # --- Drift parameters ---
+    sub.add_argument("--drift-amp", "--amp", dest="drift_amp", type=float, default=5.0,
+                     help="Amplitude of drifting ridge (mode=drift).")
+    sub.add_argument("--drift-width-frac", "--width-frac", "--width_frac",
+                     dest="drift_width_frac", type=float, default=0.08,
+                     help="Gaussian width as fraction of frequency span (mode=drift).")
+    sub.add_argument("--drift-period", "--period", dest="drift_period", type=float, default=80.0,
+                     help="Temporal wobble period in samples (mode=drift).")
+    sub.add_argument("--drift-base", "--base", dest="drift_base", type=float, default=0.3,
+                     help="Base normalized center frequency in [0,1] (mode=drift).")
+    sub.add_argument("--drift-swing", "--swing", dest="drift_swing", type=float, default=0.2,
+                     help="Normalized swing amplitude (mode=drift).")
+
+    # ---- Miscellaneous ----
+    sub.add_argument("--seed", type=int, default=None, help="Random seed for simulator.")
+    sub.add_argument("--save", type=str, default=None, help="Save quicklook image here.")
+    sub.add_argument("--no-show", action="store_true", help="Do not display the quicklook window.")
+
+
+def _simulate_cmd(args: argparse.Namespace):
+    simulate, quicklook = _get_simulator_funcs()
+
+    # Normalize contam dict based on mode
+    if args.mode == "burst":
+        contam = {
+            "mode": "burst",
+            "amp": float(args.burst_amp),
+            "frac": float(args.burst_frac),
+            "center": None if args.burst_center is None else float(args.burst_center),
+        }
+    elif args.mode == "drift":
+        contam = {
+            "mode": "drift",
+            "amp": float(args.drift_amp),
+            "width_frac": float(args.drift_width_frac),
+            "period": float(args.drift_period),
+            "base": float(args.drift_base),
+            "swing": float(args.drift_swing),
+        }
+    else:
+        contam = {"mode": "noise"}
+
+    rng = np.random.default_rng(args.seed) if args.seed is not None else None
+
+    # Call the refactored simulator (returns {"data": {...}, "sim": {...}})
+    result = simulate(
+        ns=args.ns,
+        nf=args.nf,
+        dt=args.dt,
+        time_start=args.time_start,
+        freq_start=args.freq_start,
+        df=args.df,
+        N=args.N,
+        d=args.d,
+        mode=args.mode,
+        contam=contam,
+        seed=args.seed,
+        rng=rng,
+    )
+
+    data = result["data"]    # {"power", "time_sec", "freq_hz"}
+    simmeta = result["sim"]  # {"ns","nf","dt","N","d","mode","seed","contam"}
+
+    quicklook(
+        data,
+        sim=simmeta,
+        title="Quicklook (simulated raw power)",
+        show=not args.no_show,
+        save_path=args.save,
+    )
+
+
+# ---------- Build parser ----------
 def _build_parser() -> argparse.ArgumentParser:
-    formatter = _SmartFormatter  # preserves newlines + shows defaults
+    formatter = _SmartFormatter
     parser = argparse.ArgumentParser(
         description="pygsk command-line interface",
         formatter_class=formatter,
         epilog=(
             "Examples:\n"
-            "  # Standard SK Monte Carlo + histogram\n"
+            "  # --- Simulator quicklooks ---\n"
+            "  pygsk simulate --ns 5000 --nf 1 --N 64 --d 1.0 --mode burst --burst-fraction 0.1 --seed 42\n"
+            "  pygsk simulate --ns 6000 --nf 32 --time-start 2025-10-26T00:00:00Z --freq-start 1e8 --df 2e5 --dt 0.1 --save sim.png --no-show\n"
+            "\n"
+            "  # --- SK tests ---\n"
             "  pygsk sk-test --M 256 --N 32 --pfa 1e-4 --plot\n"
-            "\n"
-            "  # Print thresholds (table/CSV/JSON)\n"
-            "  pygsk sk-thresholds --M 256 --N 32 --d 1 --pfa 1e-4 --json\n"
-            "  pygsk sk-thresholds --M 128 --N 64 --logspace 1e-5 1e-2 25 --csv\n"
-            "\n"
-            "  # Sweep PFAs and plot detection curve + thresholds overlay\n"
-            "  pygsk sk-thresholds-sweep --M 128 --N 64 --pfa-range 1e-5 1e-2 --steps 30 --plot --log_x --th --save_path sweep.pdf\n"
-            "\n"
-            "  # Renormalized SK test (assume a different integer N when thresholding raw SK)\n"
-            "  pygsk sk-renorm-test --N 64 --assumed-N 48 --plot\n"
+            "  pygsk sk-thresholds --M 128 --N 64 --logspace 1e-5 1e-2 25 --json\n"
+            "  pygsk sk-thresholds-sweep --M 128 --N 64 --pfa-range 1e-5 1e-2 --steps 30 --plot\n"
+            "  pygsk sk-renorm-test --M 128 --N 64 --assumed-N 48 --ns 40000 --nf 64 --mode drift --plot --renorm-method mode\n"
         ),
     )
-    parser.add_argument("--version", action="version", version=f"pygsk { _get_version() }")
+    parser.add_argument("--version", action="version", version=f"pygsk {_get_version()}")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     base = _build_base_parser()
 
-    # sk-test
+    # --- simulate ---
+    sim_p = subparsers.add_parser(
+        "simulate",
+        help="Generate instrument-like RAW power (ns×nf) and preview it",
+        formatter_class=formatter,
+    )
+    _add_simulator_args(sim_p)
+    sim_p.set_defaults(func=_simulate_cmd)
+
+    # --- sk-test (all args delegated to module to avoid conflicts) ---
     sk_p = subparsers.add_parser("sk-test", parents=[base], help="Run SK test",
                                  formatter_class=formatter)
     if hasattr(sk_cli, "add_args"):
         sk_cli.add_args(sk_p)
     sk_p.set_defaults(func=sk_cli.run)
 
-    # sk-thresholds
-    from pygsk.cli import sk_thresholds_cli
+    # --- sk-thresholds ---
     thr_p = subparsers.add_parser("sk-thresholds", parents=[base],
                                   help="Compute/print SK thresholds (table/CSV/JSON)",
                                   formatter_class=formatter)
@@ -156,51 +274,37 @@ def _build_parser() -> argparse.ArgumentParser:
         sk_thresholds_cli.add_args(thr_p)
     thr_p.set_defaults(func=sk_thresholds_cli.run)
 
-    # sk-thresholds-sweep
-    from pygsk.cli import sk_thresholds_sweep_cli
+    # --- sk-thresholds-sweep ---
     sweep_p = subparsers.add_parser("sk-thresholds-sweep", parents=[base],
-                                    help="Sweep PFA thresholds across a range and summarize/plot",
+                                    help="Sweep PFA thresholds and summarize/plot",
                                     formatter_class=formatter)
     if hasattr(sk_thresholds_sweep_cli, "add_args"):
         sk_thresholds_sweep_cli.add_args(sweep_p)
     sweep_p.set_defaults(func=sk_thresholds_sweep_cli.run)
 
-    # sk-renorm-test
-    renorm_new = subparsers.add_parser(
-        "sk-renorm-test", parents=[base],
-        help="Run renormalized SK test (assumed-N integer)",
-        formatter_class=formatter)
+    # --- sk-renorm-test ---
+    renorm_p = subparsers.add_parser("sk-renorm-test", parents=[base],
+                                     help="Run renormalized SK test (assumed-N integer)",
+                                     formatter_class=formatter)
     if hasattr(sk_renorm_cli, "add_args"):
-        sk_renorm_cli.add_args(renorm_new)
-    renorm_new.set_defaults(func=sk_renorm_cli.run)
-
-
+        sk_renorm_cli.add_args(renorm_p)
+    renorm_p.set_defaults(func=sk_renorm_cli.run)
 
     return parser
 
 
-
-# ---------------------------
-# Main
-# ---------------------------
-
+# ---------- Main ----------
 def _post_parse_validate(args: argparse.Namespace) -> None:
-    # Semantic checks that depend on multiple args:
-    # (Kept generic so individual subcommands can still add their own validation.)
-    if hasattr(args, "pfa_range") and args.pfa_range:
-        pfa_min, pfa_max = args.pfa_range
-        if not (pfa_min < pfa_max):
-            raise SystemExit("error: --pfa-range requires PFA_MIN < PFA_MAX")
-
-    if args.M < 2:
-        raise SystemExit("error: M must be >= 2 (denominators include (M-1)).")
+    if getattr(args, "command", None) in {"sk-test", "sk-thresholds", "sk-thresholds-sweep", "sk-renorm-test"}:
+        if hasattr(args, "M") and args.M < 2:
+            raise SystemExit("error: M must be >= 2 (denominators include (M-1)).")
 
 
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
     _post_parse_validate(args)
-    args.func(args)  # dispatch
+    args.func(args)
 
 
 if __name__ == "__main__":

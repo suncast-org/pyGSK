@@ -1,4 +1,4 @@
-# pygsk: Generalized Spectral Kurtosis Toolkit
+# pyGSK: Generalized Spectral Kurtosis Toolkit
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17336193.svg)](https://doi.org/10.5281/zenodo.17336193)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/suncast-org/pyGSK/blob/master/LICENSE)
@@ -20,12 +20,13 @@ Developed as part of the **GEO OSE Track 1: SUNCAST — Software Unified Collabo
 
 - ⚙️ **Computation of SK statistics** for arbitrary integration parameters (`M`, `N`, `d`)
 - 🧮 **Threshold estimation** from specified probability-of-false-alarm (PFA) levels
-- 📊 **Visualization tools** for SK distributions and detection thresholds
+- 📊 **Visualization tools** for SK distributions, thresholds, and validation tests
 - 💻 **Command-line interface** with subcommands:
   - `sk-test` — compute SK thresholds and optionally plot results  
   - `threshold-sweep` — scan thresholds over PFA ranges  
   - `renorm-sk-test` — perform renormalized SK analysis
 - 🧠 **Educational design:** written for clarity, reproducibility, and reuse in future SUNCAST modules
+- 📘 **Examples and Notebooks:** reproducible demonstrations under `examples/`, showcasing SK computation, validation, and simulation workflows
 
 ---
 
@@ -58,9 +59,10 @@ print(lower, upper)
 | File | Description |
 |------|--------------|
 | [install.md](install.md) | Installation instructions and dependencies |
-| [usage.md](usage.md) | Examples for computing and plotting SK |
+| [usage.md](usage.md) | API and CLI examples for computing and plotting SK |
 | [cli_guide.md](cli_guide.md) | Command-line usage and options |
 | [theory.md](theory.md) | Mathematical formulation and references |
+| [examples/README.md](../examples/README.md) | Full example suite (scripts + notebooks) |
 | [dev_guide.md](dev_guide.md) | Internal structure and contribution guide |
 | [dev_workflow.md](dev_workflow.md) | Development and release workflow |
 
