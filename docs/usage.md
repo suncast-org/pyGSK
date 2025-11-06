@@ -19,7 +19,7 @@ Both the **Python API** and **command-line interface (CLI)** provide equivalent 
 
 ---
 
-## Example 1 — Computing SK Thresholds (Python API)
+## Example 1 — Computing SK Thresholds (Python API) {#example-1}
 
 To start, import the main function from the `pygsk.thresholds` module:
 
@@ -43,7 +43,7 @@ SK thresholds for pfa=0.001: lower=0.853, upper=1.185
 
 ---
 
-## Example 2 — Plotting the SK Distribution
+## Example 2 — Plotting the SK Distribution {#example-2}
 
 ```python
 from pygsk.plot import plot_sk_distribution
