@@ -62,7 +62,7 @@ print(lower, upper)
 | [usage.md](usage.md) | API and CLI examples for computing and plotting SK |
 | [cli_guide.md](cli_guide.md) | Command-line usage and options |
 | [theory.md](theory.md) | Mathematical formulation and references |
-| [examples/README.md](../examples/README.md) | Full example suite (scripts + notebooks) |
+| [examples.md](examples.md) | Full example suite (scripts + notebooks) |
 | [dev_guide.md](dev_guide.md) | Internal structure and contribution guide |
 | [dev_workflow.md](dev_workflow.md) | Development and release workflow |
 

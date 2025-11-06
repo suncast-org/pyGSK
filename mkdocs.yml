@@ -33,6 +33,7 @@ nav:
   - Theory: theory.md
   - Developer Guide: dev_guide.md
   - Development Workflow: dev_workflow.md
+  - Examples: examples.md
 
 markdown_extensions:
   - admonition
