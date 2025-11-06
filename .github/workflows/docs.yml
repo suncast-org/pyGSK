@@ -2,7 +2,7 @@ name: Build & Deploy Docs
 
 on:
   push:
-    tags: [ "v*" ]          # only on bumpver tags
+    tags: [ "v*" ]          # only on bumpver v-tags
   workflow_dispatch:
 
 permissions:
@@ -16,11 +16,14 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ github.ref_type == 'branch' }}
+    # run for v-tags, and also when manually dispatched
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -34,7 +37,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install mkdocs mkdocs-material \
-                     pymdown-extensions mkdocs-material-extensions
+                      pymdown-extensions mkdocs-material-extensions
 
       - name: Build site (strict)
         run: mkdocs build --strict
