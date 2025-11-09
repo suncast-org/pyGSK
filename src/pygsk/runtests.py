@@ -16,11 +16,46 @@ from .plot import plot_detection_curve
 # Helpers
 # ---------------------------
 
-def _block_s1_s2(power: np.ndarray, M: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _block_s1_s2(
+    power: np.ndarray,
+    M: int,
+    time: Optional[np.ndarray] = None,
+    *,
+    time_reduce: Literal["mean", "midpoint", "left", "right"] = "mean",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Convert raw power (ns, nf) into block-accumulated S1,S2 of shape (T, F),
-    with non-overlapping blocks of size M. Returns (s1_map, s2_map, time_blk),
-    where time_blk is the block-centered time index [0..T-1] if no real time axis.
+    Convert raw power (ns, nf) -> block-accumulated S1, S2 of shape (T, F),
+    using non-overlapping blocks of size M. Returns (s1_map, s2_map, time_blk).
+
+    Parameters
+    ----------
+    power : (ns, nf) array-like
+        Raw time–frequency power. Must be 2-D.
+    M : int
+        Non-overlapping block length along time axis.
+    time : (ns,) array-like or None, optional
+        Sample times aligned with the first axis of `power` (e.g., UTC seconds).
+        If provided, returns a block-time axis computed from each block’s times.
+        If None, returns block indices (0..T-1) as floats.
+    time_reduce : {'mean','midpoint','left','right'}, default 'mean'
+        How to reduce per-block sample times to a single block time:
+          - 'mean'     : arithmetic mean of the block’s `time` samples
+          - 'midpoint' : 0.5*(time[start] + time[end-1])
+          - 'left'     : time[start]
+          - 'right'    : time[end-1]
+
+    Returns
+    -------
+    s1_map : (T, F) ndarray
+        ∑ x over each block.
+    s2_map : (T, F) ndarray
+        ∑ x² over each block.
+    time_blk : (T,) ndarray
+        Block-time axis: real times if `time` is provided, else block indices.
+
+    Notes
+    -----
+    If ns is not an exact multiple of M, trailing samples are trimmed.
     """
     power = np.asarray(power, dtype=float)
     if power.ndim != 2:
@@ -28,17 +63,36 @@ def _block_s1_s2(power: np.ndarray, M: int) -> tuple[np.ndarray, np.ndarray, np.
     ns, nf = power.shape
     if M <= 0 or ns < M:
         raise ValueError("M must be > 0 and ns >= M")
+
     T = ns // M
     if T == 0:
         raise ValueError("ns // M must be >= 1")
 
-    trimmed = power[: T * M, :]              # (T*M, F)
-    cubes   = trimmed.reshape(T, M, nf)      # (T, M, F)
-    s1_map  = np.sum(cubes, axis=1)          # (T, F)
-    s2_map  = np.sum(cubes * cubes, axis=1)  # (T, F)
-    time_blk = np.arange(T, dtype=float)     # caller may replace with real times
-    return s1_map, s2_map, time_blk
+    trimmed = power[: T * M, :]             # (T*M, F)
+    cubes   = trimmed.reshape(T, M, nf)     # (T, M, F)
+    s1_map  = np.sum(cubes, axis=1)         # (T, F)
+    s2_map  = np.sum(cubes * cubes, axis=1) # (T, F)
 
+    # Block time
+    if time is None:
+        time_blk = np.arange(T, dtype=float)
+    else:
+        time = np.asarray(time, dtype=float)
+        if time.ndim != 1 or time.size != ns:
+            raise ValueError("time must be 1-D of length ns matching power.shape[0]")
+        time = time[: T * M].reshape(T, M)
+        if time_reduce == "mean":
+            time_blk = np.mean(time, axis=1)
+        elif time_reduce == "midpoint":
+            time_blk = 0.5 * (time[:, 0] + time[:, -1])
+        elif time_reduce == "left":
+            time_blk = time[:, 0]
+        elif time_reduce == "right":
+            time_blk = time[:, -1]
+        else:
+            raise ValueError("time_reduce must be one of {'mean','midpoint','left','right'}")
+
+    return s1_map, s2_map, time_blk
 
 def _validate_precomputed(precomputed: dict) -> dict:
     """
@@ -92,10 +146,38 @@ _CLI_NOISE = {
     "no_context",  # <-- add this line
 }
 
-def _scrub_cli_kwargs(d: dict) -> dict:
+def _scrub_cli_kwargs(d: dict, mode: str | None = None) -> dict:
+    """
+    Base sanitization for CLI kwargs:
+      - remove keys in _CLI_NOISE
+      - drop None/empty/False values
+      - if `mode` is provided, drop mode-prefixed knobs that don't belong
+        (e.g., keep only burst_* when mode='burst').
+    """
     if not d:
         return {}
-    return {k: v for k, v in d.items() if k not in _CLI_NOISE and v is not None}
+
+    cleaned = {}
+    mode = (mode or "").lower().strip()
+
+    allowed_prefix = {
+        "burst": ("burst_",),
+        "drift": ("drift_",),
+        "qpo":   ("qpo_", "quasi_"),
+        "noise": (),
+    }.get(mode, ())
+
+    for k, v in d.items():
+        if k in _CLI_NOISE or v in (None, "", False):
+            continue
+        # If it looks like a mode knob, keep it only if it matches the selected mode.
+        if k.startswith(("burst_", "drift_", "qpo_", "quasi_")):
+            if not any(k.startswith(p) for p in allowed_prefix):
+                continue
+        cleaned[k] = v
+
+    return cleaned
+
 
 def _adapt_sim_cli_to_simulate(mode: str, sim_kwargs: dict) -> dict:
     """
@@ -178,7 +260,7 @@ def run_sk_test(
       (B) precomputed on-board S1/S2 maps (preferred by some instruments)
     Returns a dict with 2-D maps, axes, thresholds and counts.
     """
-    sim_kwargs = _scrub_cli_kwargs(sim_kwargs)
+    sim_kwargs = _scrub_cli_kwargs(sim_kwargs, mode)
     sim_kwargs = _adapt_sim_cli_to_simulate(mode, sim_kwargs)
     if precomputed is not None:
         pc = _validate_precomputed(precomputed)
@@ -305,7 +387,7 @@ def run_renorm_sk_test(
       (A) raw simulated power -> S1/S2 -> SK
       (B) precomputed S1/S2/M (e.g., EOVSA-like export)
     """
-    sim_kwargs = _scrub_cli_kwargs(sim_kwargs)
+    sim_kwargs = _scrub_cli_kwargs(sim_kwargs, mode)
     sim_kwargs = _adapt_sim_cli_to_simulate(mode, sim_kwargs)
     if precomputed is not None:
         pc = _validate_precomputed(precomputed)
