@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygsk"
-version = "2.0.4"  # PEP 440 (no leading 'v')
+version = "2.0.5"  # PEP 440 (no leading 'v')
 description = "Generalized Spectral Kurtosis Toolkit"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "MIT" }
@@ -89,7 +89,7 @@ target-version = ["py39"]
 
 [tool.bumpver]
 version_pattern = "MAJOR.MINOR.PATCH"
-current_version = "2.0.4"
+current_version = "2.0.5"
 
 commit_message = "bump: release v{new_version}"
 tag_message    = "Release v{new_version}"
