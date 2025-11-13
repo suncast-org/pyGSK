@@ -10,6 +10,15 @@ Example:
     pygsk sk-renorm-test --M 128 --N 64 --assumed-N 48 --ns 40000 --nf 64 \
         --mode drift --plot --renorm-method mode
 """
+# This CLI is wired exactly like sk-test in terms of simulation:
+#   sk-renorm-test → runtests.run_renorm_sk_test(**vars(args))
+#                  → _scrub_cli_kwargs(...)
+#                  → _adapt_sim_cli_to_simulate(...)
+#                  → simulate(..., contam=..., ...)
+#
+# Contamination argument names here must stay aligned with those used in
+# cli/main.py::_add_simulator_args and the expectations of
+# runtests._adapt_sim_cli_to_simulate(...).
 
 from __future__ import annotations
 import argparse
@@ -29,12 +38,48 @@ def add_args(parser: argparse.ArgumentParser) -> None:
         "--mode", choices=["noise", "burst", "drift"], default="noise",
         help="Signal synthesis mode for simulator."
     )
-    parser.add_argument("--burst-amp", type=float, default=5.0,
-                   help="Amplitude factor for burst mode.")
-    parser.add_argument("--burst-fraction", type=float, default=0.1,
-                   help="Fraction of samples containing bursts.")
-    # parser.add_argument("--seed", type=int, default=None,
-                   # help="Random seed for reproducibility.")
+
+    # --- Contamination parameters (same semantics as simulate & sk-test) ---
+
+    # Burst
+    parser.add_argument(
+        "--burst-amp", type=float, default=6.0,
+        help="Burst amplitude multiplier (mode=burst)."
+    )
+    parser.add_argument(
+        "--burst-frac", "--burst-fraction", dest="burst_fraction",
+        type=float, default=0.1,
+        help="Fraction of samples containing bursts (mode=burst)."
+    )
+    parser.add_argument(
+        "--burst-center", type=float, default=None,
+        help="Burst center (sample index, mode=burst)."
+    )
+
+    # Drift
+    parser.add_argument(
+        "--drift-amp", type=float, default=5.0,
+        help="Amplitude of drifting ridge (mode=drift)."
+    )
+    parser.add_argument(
+        "--drift-width-frac", "--drift-width_frac",
+        dest="drift_width_frac", type=float, default=0.08,
+        help="Gaussian width as fraction of frequency span (mode=drift)."
+    )
+    parser.add_argument(
+        "--drift-period", type=float, default=80.0,
+        help="Temporal wobble period in samples (mode=drift)."
+    )
+    parser.add_argument(
+        "--drift-base", type=float, default=0.3,
+        help="Base normalized center frequency in [0,1] (mode=drift)."
+    )
+    parser.add_argument(
+        "--drift-swing", type=float, default=0.2,
+        help="Normalized swing amplitude (mode=drift)."
+    )
+
+    # --- Renormalization knobs ---
     parser.add_argument(
         "--assumed-N", "--assumed_N", dest="assumed_N",
         type=int, default=1,

@@ -7,7 +7,9 @@ Public API:
            N=64, d=1.0, mode="noise", contam=None, seed=None, rng=None)
     -> {"data": {"power", "time_sec", "freq_hz"}, "sim": {...}}
 
-- quicklook(data, sim=None, title=None, show=True, save_path=None)
+- quicklook(data, sim=None, title=None, show=True, save_path=None,
+            dpi=300, transparent=False,
+            scale="linear", log_eps=None, db_ref=None)
 """
 
 from __future__ import annotations
@@ -186,12 +188,20 @@ def quicklook(
     save_path: Optional[str] = None,
     dpi: int = 300,
     transparent: bool = False,
+    # NEW: intensity scaling (visual only)
+    scale: str = "linear",
+    log_eps: Optional[float] = None,
+    db_ref: Optional[float] = None,
 ) -> None:
     """
     Quicklook for simulated RAW power using the generic plot.plot_data renderer.
     - nf == 1 => lightcurve
     - nf > 1  => dynamic spectrum
-    Annotates with a two-line box (core params, then optional contamination).
+
+    Visual scaling (affects only the display, not the underlying data):
+      scale   : "linear" (default), "log", "log10", or "db"
+      log_eps : epsilon added before log; if None, auto from 1st percentile
+      db_ref  : reference power for dB; if None, auto as median(power)
     """
     power   = np.asarray(data["power"], dtype=float)
     time    = np.asarray(data["time_sec"], dtype=float)
@@ -235,16 +245,40 @@ def quicklook(
                 if "period"     in contam: det.append(f"period={contam['period']}")
                 if "base"       in contam: det.append(f"base={contam['base']}")
                 if "swing"      in contam: det.append(f"swing={contam['swing']}")
-            # (future) if you add "dip", replicate here
             lines.append("  ".join(det))
+
+    # ---- visual scaling (no change to returned/real data) ----
+    scl = (scale or "linear").lower()
+    cbar_label = "Power (arb.)"
+    Z = power
+
+    if scl in ("log", "log10"):
+        # Robust epsilon: small positive floor from 1st percentile
+        if log_eps is None:
+            base = np.nanpercentile(Z, 1.0)
+            log_eps = float(max(base * 0.1, 1e-12))
+        Z = np.log10(np.maximum(Z, 0.0) + float(log_eps))
+        cbar_label = "log10(Power + eps)"
+
+    elif scl in ("db", "dB"):
+        # dB relative to reference power (median by default)
+        if db_ref is None:
+            db_ref = float(np.nanmedian(Z))
+            if not np.isfinite(db_ref) or db_ref <= 0:
+                db_ref = 1.0
+        Z = 10.0 * np.log10(np.maximum(Z, 0.0) / float(db_ref) + 1e-12)
+        cbar_label = "Power [dB re ref]"
+
+    elif scl != "linear":
+        raise ValueError("scale must be one of {'linear','log','log10','db'}")
 
     # ---- delegate to the general plotting routine ----
     plot.plot_data(
-        {"power": power},         # accepts mapping or ndarray
+        Z,             # visualized (possibly transformed) data
         time=time,
         freq_hz=freq_hz,
         title=title or "Quicklook (simulated raw power)",
-        cbar_label="Power (arb.)",
+        cbar_label=cbar_label,
         annotate_lines=lines,
         kind="auto",              # LC if nf==1, DS if nf>1
         is_categorical=False,
@@ -253,4 +287,3 @@ def quicklook(
         dpi=dpi,
         transparent=transparent,
         figsize=(10.5, 5.0), cbar_pad=0.08, right_pad=0.95)
-   

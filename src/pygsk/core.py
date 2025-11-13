@@ -435,7 +435,7 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
     Output (canonical keys)
     -----------------------
     Always present:
-      - 's1_map' : (T,F), 's2_map' : (T,F)
+      - 's1' : (T,F), 's2' : (T,F)               # canonical
       - 'M' : int, 'd' : float
       - 'T' : int, 'F' : int
       - 'N' : int or (F,) ndarray (no time variation)
@@ -472,7 +472,7 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
 
     pc = dict(data)  # non-destructive copy
 
-    # Normalize aliases
+    # ---------- normalize common aliases on input ----------
     if "s1_map" in pc and "s1" not in pc:
         pc["s1"] = pc["s1_map"]
     if "s2_map" in pc and "s2" not in pc:
@@ -502,12 +502,13 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
         N_out, N_TF, N_kind = _normalize_N_scalar_or_freq(N_in, T=T, F=F)
 
         out: Dict[str, Any] = dict(
-            s1_map=s1, s2_map=s2, M=M, d=d, T=int(T), F=int(F),
+            # canonical names
+            s1=s1, s2=s2,
+            M=M, d=d, T=int(T), F=int(F),
             ns_eff=int(T * M), trimmed=False,
             N=N_out, N_TF=N_TF, N_kind=N_kind,
         )
-
-        # Time (prefer explicit block times)
+        # time
         if "time_blk" in pc:
             tb = np.asarray(pc["time_blk"], dtype=float)
             if tb.ndim == 1 and tb.size == T:
@@ -517,7 +518,7 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
                 out["t0_blk"] = float(pc["t0_blk"])
                 out["dt_blk"] = float(pc["dt_blk"])
 
-        # Frequency
+        # frequency
         freq_exp, f0c, df, Fnorm = _resolve_freq_alignment(pc, F)
         if freq_exp is not None:
             out["freq_hz"] = freq_exp
@@ -528,6 +529,11 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
                 out["df"] = float(df)
             out["F"] = int(F if Fnorm is None else Fnorm)
 
+        # --- transitional compatibility (remove in a future major) ---
+        out["s1_map"] = out["s1"]
+        out["s2_map"] = out["s2"]
+        if "power" in pc:
+            out["power"] = np.asarray(pc["power"], dtype=float)
         return out
 
     # ----------------------------
@@ -569,12 +575,13 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
         N_out, N_TF, N_kind = _normalize_N_scalar_or_freq(N_in, T=T, F=F)
 
         out: Dict[str, Any] = dict(
-            s1_map=s1_map, s2_map=s2_map, M=M, d=d, T=int(T), F=int(F),
-            power_used=power_used, ns_eff=int(ns_eff), trimmed=bool(trimmed),
+            # canonical names
+            s1=s1_map, s2=s2_map,
+            M=M, d=d, T=int(T), F=int(F),
+            power=power_used, ns_eff=int(ns_eff), trimmed=bool(trimmed),
             N=N_out, N_TF=N_TF, N_kind=N_kind,
         )
 
-        # Block-time reporting
         if time_explicit is not None:
             is_unif, _dt = _is_uniform_time(time_explicit)
             if is_unif:
@@ -611,6 +618,10 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
                 out["df"] = float(df)
             out["F"] = int(F if Fnorm is None else Fnorm)
 
+        # --- transitional compatibility (remove in a future major) ---
+        out["s1_map"] = out["s1"]
+        out["s2_map"] = out["s2"]
+
         return out
 
     # Neither schema found
@@ -618,7 +629,6 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
         "data must provide either "
         "(A) S1/S2 with 'M'  or  (B) raw 'power' with 'M' (and optional time/frequency descriptors)."
     )
-
 
 
 # ---------------------------------------------------------------------
