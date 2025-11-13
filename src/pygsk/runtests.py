@@ -3,243 +3,236 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple, List
 import numpy as np
 
-from .simulator import simulate
 from . import core
+from .simulator import simulate
 from .thresholds import compute_sk_thresholds
 from . import plot as plot_mod
-from .core import _ensure_int, _ensure_float
 from .plot import plot_detection_curve
 
+# ---------------------------------------------------------------------
+# Design note: how CLI simulation knobs reach simulator.simulate(...)
+# ---------------------------------------------------------------------
+#
+# The flow for any SK test that uses simulated data is:
+#
+#   CLI (main.py + sk_cli.py / sk_renorm_cli.py)
+#       ↓  (argparse produces a Namespace)
+#   runtests.run_sk_test / runtests.run_renorm_sk_test(**vars(args))
+#       ↓
+#   _scrub_cli_kwargs(...)  → drop pure-CLI / plotting args
+#       ↓
+#   _adapt_sim_cli_to_simulate(mode, sim_kwargs)
+#       ↓
+#   simulate(ns=..., nf=..., N=..., d=..., mode=..., contam=..., ...)
+#
+# The important contract:
+#   * CLI modules define contamination-related arguments using names
+#     like `burst_amp`, `burst_frac` / `burst_fraction`, `drift_amp`,
+#     `drift_width_frac`, `drift_period`, `drift_base`, `drift_swing`.
+#   * _adapt_sim_cli_to_simulate(...) consumes those names and builds a
+#     single `contam` dictionary with the structure expected by
+#     simulator.simulate(...):
+#
+#         contam = {"mode": "burst", "amp": ..., "frac": ..., "center": ...}
+#         contam = {"mode": "drift", "amp": ..., "width_frac": ..., ...}
+#         contam = {"mode": "noise"}  # no extra parameters
+#
+#   * After adaptation, **no raw burst/drift kwargs** are passed through
+#     to simulate(...); only `contam` carries that information.
+#
+# This keeps simulate(...) clean and makes it easy to keep the CLI and
+# simulator API in sync without proliferating keyword arguments.
 
 
-# ---------------------------
-# Helpers
-# ---------------------------
+# ---------------------------------------------------------------------
+# Small helpers
+# ---------------------------------------------------------------------
 
-def _block_s1_s2(
-    power: np.ndarray,
-    M: int,
-    time: Optional[np.ndarray] = None,
-    *,
-    time_reduce: Literal["mean", "midpoint", "left", "right"] = "mean",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Convert raw power (ns, nf) -> block-accumulated S1, S2 of shape (T, F),
-    using non-overlapping blocks of size M. Returns (s1_map, s2_map, time_blk).
-
-    Parameters
-    ----------
-    power : (ns, nf) array-like
-        Raw time–frequency power. Must be 2-D.
-    M : int
-        Non-overlapping block length along time axis.
-    time : (ns,) array-like or None, optional
-        Sample times aligned with the first axis of `power` (e.g., UTC seconds).
-        If provided, returns a block-time axis computed from each block’s times.
-        If None, returns block indices (0..T-1) as floats.
-    time_reduce : {'mean','midpoint','left','right'}, default 'mean'
-        How to reduce per-block sample times to a single block time:
-          - 'mean'     : arithmetic mean of the block’s `time` samples
-          - 'midpoint' : 0.5*(time[start] + time[end-1])
-          - 'left'     : time[start]
-          - 'right'    : time[end-1]
-
-    Returns
-    -------
-    s1_map : (T, F) ndarray
-        ∑ x over each block.
-    s2_map : (T, F) ndarray
-        ∑ x² over each block.
-    time_blk : (T,) ndarray
-        Block-time axis: real times if `time` is provided, else block indices.
-
-    Notes
-    -----
-    If ns is not an exact multiple of M, trailing samples are trimmed.
-    """
-    power = np.asarray(power, dtype=float)
-    if power.ndim != 2:
-        raise ValueError("power must be a 2-D array (ns, nf)")
-    ns, nf = power.shape
-    if M <= 0 or ns < M:
-        raise ValueError("M must be > 0 and ns >= M")
-
-    T = ns // M
-    if T == 0:
-        raise ValueError("ns // M must be >= 1")
-
-    trimmed = power[: T * M, :]             # (T*M, F)
-    cubes   = trimmed.reshape(T, M, nf)     # (T, M, F)
-    s1_map  = np.sum(cubes, axis=1)         # (T, F)
-    s2_map  = np.sum(cubes * cubes, axis=1) # (T, F)
-
-    # Block time
-    if time is None:
-        time_blk = np.arange(T, dtype=float)
-    else:
-        time = np.asarray(time, dtype=float)
-        if time.ndim != 1 or time.size != ns:
-            raise ValueError("time must be 1-D of length ns matching power.shape[0]")
-        time = time[: T * M].reshape(T, M)
-        if time_reduce == "mean":
-            time_blk = np.mean(time, axis=1)
-        elif time_reduce == "midpoint":
-            time_blk = 0.5 * (time[:, 0] + time[:, -1])
-        elif time_reduce == "left":
-            time_blk = time[:, 0]
-        elif time_reduce == "right":
-            time_blk = time[:, -1]
-        else:
-            raise ValueError("time_reduce must be one of {'mean','midpoint','left','right'}")
-
-    return s1_map, s2_map, time_blk
-
-def _validate_precomputed(precomputed: dict) -> dict:
-    """
-    Validate an on-board S1/S2 payload. Returns a normalized dict with:
-      s1_map, s2_map, time_blk, freq_hz, M, N, d
-    Defaults: N=1, d=1.0; makes index axes if time/freq absent.
-    """
-    if not isinstance(precomputed, dict):
-        raise TypeError("precomputed must be a dict")
-
-    s1 = np.asarray(precomputed["s1"], dtype=float)
-    s2 = np.asarray(precomputed["s2"], dtype=float)
-    if s1.shape != s2.shape or s1.ndim != 2:
-        raise ValueError("precomputed['s1'] and ['s2'] must be 2-D with identical shape (T,F)")
-    T, F = s1.shape
-
-    if "M" not in precomputed:
-        raise ValueError("precomputed payload must include integer 'M'")
-    M = int(precomputed["M"])
-
-    time_blk = precomputed.get("time_blk")
-    if time_blk is None:
-        time_blk = np.arange(T, dtype=float)
-    else:
-        time_blk = np.asarray(time_blk, dtype=float)
-        if time_blk.ndim != 1 or time_blk.size != T:
-            time_blk = np.arange(T, dtype=float)
-
-    freq_hz = precomputed.get("freq_hz")
-    if freq_hz is None:
-        freq_hz = np.arange(F, dtype=float)
-    else:
-        freq_hz = np.asarray(freq_hz, dtype=float)
-        if freq_hz.ndim != 1 or freq_hz.size != F:
-            freq_hz = np.arange(F, dtype=float)
-
-    N = int(precomputed.get("N", 1))
-    d = float(precomputed.get("d", 1.0))
-
-    return dict(
-        s1_map=s1, s2_map=s2, time_blk=time_blk, freq_hz=freq_hz,
-        M=M, N=N, d=d
-    )
-
-
-# keep for completeness—safe no-op if unused
+# CLI plumbing that should never reach simulate()
 _CLI_NOISE = {
-    "command", "func", "json", "dpi", "transparent", "verbose", "save_path",
-    "plot", "log_bins", "log_x", "log_count", "renorm", "assumed_N",
-    "renorm_method", "tolerance",
-    "no_context",  # <-- add this line
+    "command", "func", "json",
+    "dpi", "transparent", "verbose", "save_path", "plot",
+    "log_bins", "log_x", "log_count",
+    "renorm", "assumed_N", "renorm_method", "tolerance",
+    "no_context",
+    # image scaling knobs belong to plotting only
+    "scale", "vmin", "vmax", "log_eps", "cmap",
 }
 
-def _scrub_cli_kwargs(d: dict, mode: str | None = None) -> dict:
+# ---------------------------------------------------------------------
+# Helpers for adapting CLI kwargs to simulator.simulate(...)
+# ---------------------------------------------------------------------
+def _scrub_cli_kwargs(sim_kwargs: dict) -> dict:
     """
-    Base sanitization for CLI kwargs:
-      - remove keys in _CLI_NOISE
-      - drop None/empty/False values
-      - if `mode` is provided, drop mode-prefixed knobs that don't belong
-        (e.g., keep only burst_* when mode='burst').
+    Remove non-simulation arguments coming from CLI (plotting, thresholds, etc.).
+
+    This function is called from run_sk_test(...) and run_renorm_sk_test(...),
+    right before we adapt the remaining kwargs to simulator.simulate(...).
+
+    We keep only things that might reasonably belong in simulator.simulate(...),
+    such as:
+      * ns, nf
+      * time/frequency metadata (dt, time_start, freq_start, df)
+      * contamination parameters (burst/drift), which are then normalized by
+        _adapt_sim_cli_to_simulate(...)
+
+    Everything that is purely CLI/plumbing/plotting is stripped here:
+      * argparse plumbing: func, command, json
+      * plotting control: plot, save_path, dpi, transparent, log_bins, ...
+      * SK-test/renorm-test-specific knobs: assumed_N, renorm_method, tolerance
+      * plot scaling options: scale, vmin, vmax, log_eps, cmap
     """
-    if not d:
-        return {}
+    kw = dict(sim_kwargs)
 
-    cleaned = {}
-    mode = (mode or "").lower().strip()
+    for k in _CLI_NOISE:
+        kw.pop(k, None)
 
-    allowed_prefix = {
-        "burst": ("burst_",),
-        "drift": ("drift_",),
-        "qpo":   ("qpo_", "quasi_"),
-        "noise": (),
-    }.get(mode, ())
-
-    for k, v in d.items():
-        if k in _CLI_NOISE or v in (None, "", False):
-            continue
-        # If it looks like a mode knob, keep it only if it matches the selected mode.
-        if k.startswith(("burst_", "drift_", "qpo_", "quasi_")):
-            if not any(k.startswith(p) for p in allowed_prefix):
-                continue
-        cleaned[k] = v
-
-    return cleaned
+    return kw
 
 
 def _adapt_sim_cli_to_simulate(mode: str, sim_kwargs: dict) -> dict:
     """
-    Map CLI-style contamination knobs (burst/drift) into simulate()'s expected
-    'contam' dict, and strip unknown keys so simulate() won't choke.
+    Adapt CLI-style kwargs to match simulator.simulate(...).
+
+    In the refactored design, simulator.simulate(...) *does not* accept
+    raw contamination parameters like `burst_amp` or `drift_amp` as top-
+    level keyword arguments. Instead, it expects a single `contam`
+    dictionary describing the injected signal, e.g.:
+
+        contam = {"mode": "burst", "amp": 6.0, "frac": 0.1, "center": ...}
+        contam = {"mode": "drift", "amp": 5.0, "width_frac": 0.08, ...}
+        contam = {"mode": "noise"}
+
+    This helper:
+
+      1. Reads the contamination-related CLI kwargs from sim_kwargs
+         (burst_amp, burst_frac/burst_fraction, burst_center,
+          drift_amp, drift_width_frac, drift_period, drift_base,
+          drift_swing), mirroring the argument names wired in:
+             * cli/main.py::_add_simulator_args
+             * cli/sk_cli.py::add_args
+             * cli/sk_renorm_cli.py::add_args
+
+      2. Builds a normalized `contam` dict compatible with simulate(...).
+
+      3. Removes those raw contamination arguments from sim_kwargs so
+         they are *not* passed directly to simulate(...).
+
+      4. Injects `contam` into the returned kwargs.
+
+    The returned dict is therefore safe to pass as **sim_kwargs to
+    simulate(...), and keeps the simulate(...) API focused and stable.
     """
-    if not sim_kwargs:
-        return {}
+    raw = dict(sim_kwargs)  # work on a copy; may contain burst/drift knobs, etc.
+    mode = str(mode or "noise")
 
-    out = dict(sim_kwargs)  # shallow copy
+    # ---- Build contam dict (mirror main.py's logic) ----
+    if mode == "burst":
+        burst_amp = float(raw.get("burst_amp", 6.0))
+        burst_frac = float(
+            raw.get(
+                "burst_frac",
+                raw.get("burst_fraction", 0.1)
+            )
+        )
+        burst_center = raw.get("burst_center", None)
+        if burst_center is not None:
+            burst_center = float(burst_center)
 
-    # Construct/merge a contam dict if the user passed any contamination knobs
-    contam = dict(out.get("contam") or {})  # allow pre-existing
+        contam = {
+            "mode": "burst",
+            "amp": burst_amp,
+            "frac": burst_frac,
+            "center": burst_center,
+        }
 
-    m = (mode or "").lower()
+    elif mode == "drift":
+        drift_amp        = float(raw.get("drift_amp", 5.0))
+        drift_width_frac = float(raw.get("drift_width_frac", 0.08))
+        drift_period     = float(raw.get("drift_period", 80.0))
+        drift_base       = float(raw.get("drift_base", 0.3))
+        drift_swing      = float(raw.get("drift_swing", 0.2))
 
-    # ---- burst mode mappings ----
-    if m == "burst":
-        amp  = out.pop("burst_amp", None)
-        frac = out.pop("burst_fraction", None)
-        center = out.pop("burst_center", None)
-        widthf = out.pop("burst_width_frac", None)
-        # If any burst knobs provided, declare contam=burst
-        if any(v is not None for v in (amp, frac, center, widthf)):
-            contam["mode"] = "burst"
-            if amp   is not None: contam["amp"] = amp
-            if frac  is not None: contam["frac"] = frac
-            if center is not None: contam["center"] = center
-            if widthf is not None: contam["width_frac"] = widthf
+        contam = {
+            "mode": "drift",
+            "amp": drift_amp,
+            "width_frac": drift_width_frac,
+            "period": drift_period,
+            "base": drift_base,
+            "swing": drift_swing,
+        }
 
-    # ---- drift mode mappings (if you support these CLI flags) ----
-    if m == "drift":
-        period = out.pop("drift_period", None)
-        base   = out.pop("drift_base", None)
-        swing  = out.pop("drift_swing", None)
-        depth  = out.pop("drift_depth", None)
-        if any(v is not None for v in (period, base, swing, depth)):
-            contam["mode"] = "drift"
-            if period is not None: contam["period"] = period
-            if base   is not None: contam["base"]   = base
-            if swing  is not None: contam["swing"]  = swing
-            if depth  is not None: contam["depth"]  = depth
+    else:
+        # Pure noise: ignore any stray burst/drift params entirely
+        contam = {"mode": "noise"}
 
-    if contam:
-        out["contam"] = contam
+    # ---- Build the final, allow-listed kwargs for simulate(...) ----
+    # Only forward metadata that simulate is known to accept.
+    allowed: dict[str, Any] = {}
+
+    for key in ("dt", "time_start", "freq_start", "df", "rng"):
+        if key in raw:
+            allowed[key] = raw[key]
+
+    # always attach contam
+    allowed["contam"] = contam
+
+    return allowed
+
+
+
+def _legacy_aliases(res: dict) -> dict:
+    """
+    Add plotter-friendly aliases without removing original keys.
+    Ensures s1_map/sk_map_raw/sk_map_ren/time/freq_hz exist if their
+    base names are present.
+    """
+    out = dict(res)
+
+    # Arrays
+    if "s1" in out and "s1_map" not in out:
+        out["s1_map"] = out["s1"]
+    if "sk" in out and "sk_map_raw" not in out:
+        out["sk_map_raw"] = out["sk"]
+    if "sk_ren" in out and "sk_map_ren" not in out:
+        out["sk_map_ren"] = out["sk_ren"]
+
+    # Axes
+    if "freq_hz" not in out and "freq" in out:
+        out["freq_hz"] = out["freq"]
+
+    # Bookkeeping expected by the plotter
+    if "total" not in out:
+        # prefer sk_map_ren size; otherwise sk_map_raw; otherwise s1_map
+        for k in ("sk_map_ren", "sk_map_raw", "s1_map"):
+            if k in out:
+                arr = np.asarray(out[k])
+                out["total"] = int(arr.size)
+                break
+
+    # pfa_expected: keep if provided (your code already sets it)
+    # thresholds/counts are computed/used by the plotter if missing; no action needed.
 
     return out
 
-# ---------------------------
+
+
+# ---------------------------------------------------------------------
 # 1) Plain SK test
-# ---------------------------
+# ---------------------------------------------------------------------
 def run_sk_test(
     *,
+    # SK parameters
     M: int = 128,
     N: int = 64,
     d: float = 1.0,
     pfa: float = 0.0013499,
+    # simulation fallback (used only when precomputed is None)
     ns: int = 10000,
     seed: int | None = 42,
     nf: int = 1,
     mode: str = "noise",
-    # plotting
+    # plotting toggles
     plot: bool = False,
     log_bins: bool = True,
     log_x: bool = True,
@@ -248,113 +241,133 @@ def run_sk_test(
     dpi: int = 300,
     transparent: bool = False,
     verbose: bool = False,
-    # precomputed on-board S1/S2 path:
-    precomputed: dict | None = None,
     no_context: bool = False,
-    # any simulator kwargs (dt, freq_start, df, contam, etc.)
+    # image scaling for context panels
+    scale: str = "linear",
+    vmin: float | None = None,
+    vmax: float | None = None,
+    log_eps: float | None = None,
+    cmap: str = "viridis",
+    # real-data (preferred) input or simulated kwargs
+    precomputed: dict | None = None,
     **sim_kwargs,
 ) -> dict:
     """
-    SK test on either:
-      (A) raw simulated power -> block to S1,S2 -> SK
-      (B) precomputed on-board S1/S2 maps (preferred by some instruments)
-    Returns a dict with 2-D maps, axes, thresholds and counts.
+    Run a single SK test. ALL inputs (simulated or real) are normalized via
+    core.prepare_sk_input to keep one canonical path. This guarantees that
+    'power' (when available) is preserved so the Power panel is drawn.
     """
-    sim_kwargs = _scrub_cli_kwargs(sim_kwargs, mode)
-    sim_kwargs = _adapt_sim_cli_to_simulate(mode, sim_kwargs)
     if precomputed is not None:
-        pc = _validate_precomputed(precomputed)
-        s1_map = pc["s1_map"]
-        s2_map = pc["s2_map"]
-        time_blk = pc["time_blk"]
-        freq_hz  = pc["freq_hz"]
-        M_eff    = int(pc["M"])
-        N_eff    = int(pc["N"])
-        d_eff    = float(pc["d"])
-        power = None       
-        sim_meta = None             
-
+        pc = core.prepare_sk_input(precomputed)
     else:
-        # Simulate RAW power and build S1/S2 by blocking
+        # Simulate raw power, then normalize via prepare_sk_input
+        sim_kwargs = _adapt_sim_cli_to_simulate(mode, _scrub_cli_kwargs(sim_kwargs))
         sim = simulate(ns=ns, nf=nf, N=N, d=d, mode=mode, seed=seed, **sim_kwargs)
         data = sim["data"]
-        power = np.asarray(data["power"], dtype=float)         # (ns, nf)
-        time_sec = np.asarray(data["time_sec"], dtype=float)   # (ns,)
-        freq_hz  = np.asarray(data["freq_hz"], dtype=float)    # (nf,)
-        sim_meta = sim.get("sim", {}) 
+        pc = core.prepare_sk_input({
+            "power": np.asarray(data["power"], float),
+            "time":  np.asarray(data["time_sec"], float),
+            "freq":  np.asarray(data["freq_hz"],  float),
+            "M": int(M),
+            "N": int(N),
+            "d": float(d),
+            "sim": sim.get("sim", {}),
+        })
 
-        s1_map, s2_map, _time_blk_idx = _block_s1_s2(power, M)
-        T = s1_map.shape[0]
-        if time_sec.size >= T * M:
-            centers = (np.arange(T) * M + (M / 2.0))
-            dt = float(sim.get("sim", {}).get("dt", 1.0))
-            time_blk = centers * dt
-        else:
-            time_blk = _time_blk_idx
+    # Canonical fields (the only source of truth)
+    # s1   = np.asarray(pc["s1"],  float)
+    # s2   = np.asarray(pc["s2"],  float)
+    # time = (np.asarray(pc["time_blk"], float) if "time_blk" in pc
+            # else np.asarray(pc["time"], float) if "time" in pc
+            # else np.arange(s1.shape[0], dtype=float))
+    # freq = (np.asarray(pc["freq_hz"], float) if "freq_hz" in pc
+            # else np.asarray(pc["freq"], float) if "freq" in pc
+            # else np.arange(s1.shape[1], dtype=float))
 
-        M_eff, N_eff, d_eff = int(M), int(N), float(d)
-        power_for_context = power
+    s1 = np.asarray(pc["s1"], float)
+    s2 = np.asarray(pc["s2"], float)
 
-    # Compute SK map (2-D)
-    sk_map = core.get_sk(s1_map, s2_map, M_eff, N=N_eff, d=d_eff)
+    # Robust time/freq extraction with sensible defaults
+    ns = s1.shape[0]
+    nf = (s1.shape[1] if s1.ndim == 2 else 1)
+
+    time = pc.get("time", pc.get("time_sec", None))
+    if time is None:
+        time = np.arange(ns, dtype=float)
+    else:
+        time = np.asarray(time, float)
+
+    freq = pc.get("freq", pc.get("freq_hz", None))
+    if freq is None:
+        freq = np.arange(nf, dtype=float)
+    else:
+        freq = np.asarray(freq, float)
+
+    M_eff, d_eff = int(pc["M"]), float(pc["d"])
+    # N can be scalar or per-frequency; thresholds require a scalar—use median if vector.
+    N_in = pc.get("N", 1)
+    try:
+        N_eff = int(N_in)
+    except Exception:
+        arrN = np.asarray(N_in, float)
+        N_eff = int(np.nanmedian(arrN)) if (arrN.ndim == 1 and arrN.size == s1.shape[1]) else 1
+
+    power   = pc.get("power", None)  # preserved by prepare_sk_input for raw-power inputs
+    sim_meta = pc.get("sim", None)
+
+    # Compute SK and thresholds
+    sk = core.get_sk(s1, s2, M_eff, N=N_eff, d=d_eff)
     lo, hi, _ = compute_sk_thresholds(M_eff, N=N_eff, d=d_eff, pfa=pfa)
 
-    # Flags: -1 (below), 0 (inside), +1 (above)
-    flags = np.zeros_like(sk_map, dtype=int)
-    flags[sk_map < lo] = -1
-    flags[sk_map > hi] = +1
+    # Flags & counts
+    sk_flags = np.zeros_like(sk, dtype=int)
+    sk_flags[sk < lo] = -1
+    sk_flags[sk > hi] = +1
 
-    # Counts for empirical PFA
-    flat = sk_map.ravel()
+    flat = sk.ravel()
     below = int(np.count_nonzero(flat < lo))
     above = int(np.count_nonzero(flat > hi))
     total = int(flat.size)
-    pfa_emp_two_sided = (below + above) / float(total)
-    expected_total_pfa = 2.0 * pfa
+    pfa_emp_two = (below + above) / float(total)
+    pfa_exp_two = 2.0 * pfa
 
     if verbose:
         print(f"[run_sk_test] M={M_eff} N={N_eff} d={d_eff} pfa={pfa}")
         print(f" thresholds: lo={lo:.6g} hi={hi:.6g}")
-        print(f" empirical two-sided PFA={pfa_emp_two_sided:.6g} vs expected={expected_total_pfa:.6g}")
+        print(f" empirical two-sided PFA={pfa_emp_two:.6g} vs expected={pfa_exp_two:.6g}")
 
-    result={
-        "s1_map": s1_map,
-        "s2_map": s2_map,
-        "sk_map_raw": sk_map,
-        "flags_map": flags,
-        "time": time_blk,
-        "freq_hz": freq_hz,
-        "lower_raw": float(lo),
-        "upper_raw": float(hi),
-        "below_raw": below,
-        "above_raw": above,
-        "total": total,
-        "pfa_empirical": float(pfa_emp_two_sided),
-        "pfa_expected": float(expected_total_pfa),
-        "M": int(M_eff),
-        "N": int(N_eff),
-        "d": float(d_eff),
-        "power": power,              # shape (ns, nf)
-        "sim": sim_meta,             # dict with ns,nf,dt,N,d,mode,contam,seed,...
+    # Result (with legacy aliases for downstream compatibility)
+    result = {
+        "s1": s1, "s2": s2, "sk": sk, "sk_flags": sk_flags,
+        "time": time, "freq": freq,
+        "lower_raw": float(lo), "upper_raw": float(hi),
+        "below_raw": below, "above_raw": above, "total": total,
+        "pfa_empirical": float(pfa_emp_two), "pfa_expected": float(pfa_exp_two),
+        "M": int(M_eff), "N": int(N_eff), "d": float(d_eff),
+        "power": power, "sim": sim_meta,
+        # legacy keys:
+        "s1_map": s1, "s2_map": s2, "sk_map_raw": sk, "flags_map": sk_flags,
+        "time_blk": time, "freq_hz": freq,
     }
-    
-     # Plot
+
     if plot:
         try:
             plot_mod.plot_sk_histogram(
                 result,
                 log_bins=log_bins, log_x=log_x, log_count=log_count,
-                show=True, save_path=save_path, dpi=dpi, transparent=transparent, no_context=no_context,
+                show=True, save_path=save_path, dpi=dpi, transparent=transparent,
+                no_context=no_context,
+                scale=scale, vmin=vmin, vmax=vmax, log_eps=log_eps, cmap=cmap,
             )
         except Exception as e:
-            print(f"[run_renorm_sk_test] Plotting failed: {e}")
-    
+            print(f"[run_sk_test] Plotting failed: {e}")
+
     return result
 
 
-# ---------------------------
+# ---------------------------------------------------------------------
 # 2) Renormalized SK test
-# ---------------------------
+# ---------------------------------------------------------------------
 def run_renorm_sk_test(
     *,
     M: int = 128,
@@ -376,58 +389,66 @@ def run_renorm_sk_test(
     log_count: bool = False,
     dpi: int = 300,
     transparent: bool = False,
-    # precomputed on-board S1/S2 path:
-    precomputed: dict | None = None,
     no_context: bool = False,
-    # simulator kwargs (dt, freq_start, df, contam, etc.)
+    # image scaling for context panels
+    scale: str = "linear",
+    vmin: float | None = None,
+    vmax: float | None = None,
+    log_eps: float | None = None,
+    cmap: str = "viridis",
+    precomputed: dict | None = None,
     **sim_kwargs,
 ) -> dict:
     """
-    Renormalized SK validation on either:
-      (A) raw simulated power -> S1/S2 -> SK
-      (B) precomputed S1/S2/M (e.g., EOVSA-like export)
+    Renormalized SK on canonical inputs (prefer precomputed from real data).
+    If not provided, simulate, prepare with core.prepare_sk_input, then compute.
     """
-    sim_kwargs = _scrub_cli_kwargs(sim_kwargs, mode)
-    sim_kwargs = _adapt_sim_cli_to_simulate(mode, sim_kwargs)
     if precomputed is not None:
-        pc = _validate_precomputed(precomputed)
-        s1_map = pc["s1_map"]
-        s2_map = pc["s2_map"]
-        time_blk = pc["time_blk"]
-        freq_hz  = pc["freq_hz"]
-        M_eff    = int(pc["M"])
-        N_true   = int(pc["N"])
-        d_true   = float(pc["d"])
-        power_for_context = s1_map
-        sim_meta=None
+        pc = core.prepare_sk_input(precomputed)
     else:
+        # Simulate raw power, then normalize via prepare_sk_input
+        sim_kwargs = _adapt_sim_cli_to_simulate(mode, _scrub_cli_kwargs(sim_kwargs))
         sim = simulate(ns=ns, nf=nf, N=N, d=d, mode=mode, seed=seed, **sim_kwargs)
         data = sim["data"]
-        power = np.asarray(data["power"], dtype=float)
-        time_sec = np.asarray(data["time_sec"], dtype=float)
-        freq_hz  = np.asarray(data["freq_hz"], dtype=float)
+        pc = core.prepare_sk_input({
+            "power": np.asarray(data["power"], float),
+            "time":  np.asarray(data["time_sec"], float),
+            "freq":  np.asarray(data["freq_hz"],  float),
+            "M": int(M),
+            "N": int(N),
+            "d": float(d),
+            "sim": sim.get("sim", {}),
+        })
 
-        s1_map, s2_map, _time_blk_idx = _block_s1_s2(power, M)
-        T = s1_map.shape[0]
-        if time_sec.size >= T * M:
-            centers = (np.arange(T) * M + (M / 2.0))
-            dt = float(sim.get("sim", {}).get("dt", 1.0))
-            time_blk = centers * dt
-        else:
-            time_blk = _time_blk_idx
+    s1 = np.asarray(pc["s1"], float)
+    s2 = np.asarray(pc["s2"], float)
 
-        M_eff, N_true, d_true = int(M), int(N), float(d)
-        sim_meta = sim.get("sim", {}) 
+    # Robust time/freq extraction with sensible defaults
+    ns = s1.shape[0]
+    nf = (s1.shape[1] if s1.ndim == 2 else 1)
+
+    time = pc.get("time", pc.get("time_sec", None))
+    if time is None:
+        time = np.arange(ns, dtype=float)
+    else:
+        time = np.asarray(time, float)
+
+    freq = pc.get("freq", pc.get("freq_hz", None))
+    if freq is None:
+        freq = np.arange(nf, dtype=float)
+    else:
+        freq = np.asarray(freq, float)
         
-        power_for_context = power
+    M_eff, N_true, d_true = int(pc["M"]), int(pc["N"]), float(pc["d"])
+    sim_meta = pc.get("sim", None)
 
-    # RAW SK with assumed_N, d=1.0
-    sk_map_raw = core.get_sk(s1_map, s2_map, M_eff, N=assumed_N, d=1.0)
+    # Raw SK (assumed_N, d=1)
+    sk_raw = core.get_sk(s1, s2, M_eff, N=assumed_N, d=1.0)
     lo_raw, hi_raw, _ = compute_sk_thresholds(M_eff, N=assumed_N, d=1.0, pfa=pfa)
 
-    # Renormalize to empirical d̂, using true N
-    d_empirical, sk_map_ren = core.renorm_sk(
-        s1_map, s2_map, M_eff,
+    # Renormalize using true N to empirical d^
+    d_empirical, sk_ren = core.renorm_sk(
+        s1, s2, M_eff,
         d=d_true,
         assumed_N=assumed_N,
         method=renorm_method,
@@ -437,39 +458,32 @@ def run_renorm_sk_test(
     lo_ren, hi_ren, _ = compute_sk_thresholds(M_eff, N=N_true, d=float(d_empirical), pfa=pfa)
 
     # Counts
-    raw_flat = sk_map_raw.ravel()
-    ren_flat = sk_map_ren.ravel()
-    below_raw = int(np.sum(raw_flat < lo_raw))
-    above_raw = int(np.sum(raw_flat > hi_raw))
-    below_ren = int(np.sum(ren_flat < lo_ren))
-    above_ren = int(np.sum(ren_flat > hi_ren))
+    raw_flat, ren_flat = sk_raw.ravel(), sk_ren.ravel()
+    below_raw = int(np.count_nonzero(raw_flat < lo_raw))
+    above_raw = int(np.count_nonzero(raw_flat > hi_raw))
+    below_ren = int(np.count_nonzero(ren_flat < lo_ren))
+    above_ren = int(np.count_nonzero(ren_flat > hi_ren))
     total = int(ren_flat.size)
-    pfa_emp_two_sided = (below_ren + above_ren) / float(total)
-    expected_total_pfa = 2.0 * pfa
+    pfa_emp_two = (below_ren + above_ren) / float(total)
+    pfa_exp_two = 2.0 * pfa
 
     if tolerance is not None and mode == "noise":
-        if abs(pfa_emp_two_sided - expected_total_pfa) > tolerance:
+        if abs(pfa_emp_two - pfa_exp_two) > tolerance:
             raise AssertionError(
-                f"Empirical PFA {pfa_emp_two_sided:.6f} vs expected {expected_total_pfa:.6f} "
-                f"(tol={tolerance})"
+                f"Empirical PFA {pfa_emp_two:.6g} vs expected {pfa_exp_two:.6g} (tol={tolerance})"
             )
 
     if verbose:
         print(f"[run_renorm_sk_test] d_empirical={float(d_empirical):.6g}")
-        print(f"PFA(two-sided): empirical={pfa_emp_two_sided:.6g}, expected={expected_total_pfa:.6g}")
+        print(f"PFA(two-sided): empirical={pfa_emp_two:.6g}, expected={pfa_exp_two:.6g}")
 
-    result= {
-        # 2-D maps
-        "s1_map": s1_map,
-        "s2_map": s2_map,
-        "sk_map_raw": sk_map_raw,
-        "sk_map_ren": sk_map_ren,
-
-        # Axes
-        "time": time_blk,
-        "freq_hz": freq_hz,
-
-        # Thresholds & counts
+    result = _legacy_aliases({
+        "s1": s1,
+        "s2": s2,
+        "sk": sk_raw,
+        "sk_ren": sk_ren,
+        "time": time,
+        "freq": freq,
         "lower_raw": float(lo_raw),
         "upper_raw": float(hi_raw),
         "lower_renorm": float(lo_ren),
@@ -479,39 +493,34 @@ def run_renorm_sk_test(
         "below_renorm": below_ren,
         "above_renorm": above_ren,
         "total": total,
-
-        # Renormalization
         "d_empirical": float(d_empirical),
-
-        # PFA bookkeeping
-        "pfa_empirical": float(pfa_emp_two_sided),
-        "pfa_expected": float(expected_total_pfa),
-
-        # Meta
+        "pfa_empirical": float(pfa_emp_two),
+        "pfa_expected": float(pfa_exp_two),
         "M": int(M_eff),
         "N": int(N_true),
         "d": float(d_true),
         "assumed_N": int(assumed_N),
         "renorm_method": renorm_method,
-        "sim": sim_meta, 
-    }
-    
-    # Plot
+        "sim": sim_meta,
+    })
+
     if plot:
         try:
-            meta_lines = [f"M={M_eff}  N={N_true}  d_true={d_true:g}  pfa={pfa:g}"]
-            plot_mod.plot_sk_dual_histogram(result, show=True, save_path=save_path, log_x=log_x, 
-            log_bins=log_bins, log_count=log_count, dpi=dpi, transparent=transparent, no_context=no_context,)
-
+            plot_mod.plot_sk_dual_histogram(
+                result,
+                show=True, save_path=save_path,
+                log_x=log_x, log_bins=log_bins, log_count=log_count,
+                dpi=dpi, transparent=transparent, no_context=no_context,
+                scale=scale, vmin=vmin, vmax=vmax, log_eps=log_eps, cmap=cmap,
+            )
         except Exception as e:
             print(f"[run_renorm_sk_test] Plotting failed: {e}")
+
     return result
-    
 
 # ---------------------------------------------------------------------
-# Threshold sweep across PFAs
+# 3) Threshold sweep (unchanged API; uses canonical/legacy flex)
 # ---------------------------------------------------------------------
-
 def sweep_thresholds(
     M: int = 128,
     N: int = 64,
@@ -532,18 +541,12 @@ def sweep_thresholds(
     logspace: bool = False,
     dc_log_x: bool = False,
     dc_log_y: bool = False,
-    th: bool = False,                    # <-- accept the flag here
+    th: bool = False,
 ):
     import numpy as np
-    from .thresholds import compute_sk_thresholds
-    from .core import _ensure_int  # or your local validator
 
-    M = _ensure_int("M", M)
-    N = _ensure_int("N", N)
+    results: List[dict] = []
 
-    # ... (your existing range handling & loop) ...
-    results = []
-    # build pfas:
     if pfa_range is None and alpha_range is None:
         pfa_range = (5e-4, 5e-3)
     elif pfa_range is None and alpha_range is not None:
@@ -554,46 +557,32 @@ def sweep_thresholds(
             if logspace else
             np.linspace(lo, hi, int(steps)))
 
-    for pfa in pfas:
-        # thresholds
-        lo_th, hi_th, std_sk = compute_sk_thresholds(M=M, N=N, d=d, pfa=float(pfa))
+    for p in pfas:
+        lo_th, hi_th, std_sk = compute_sk_thresholds(M=M, N=N, d=d, pfa=float(p))
+        res = run_sk_test(M=M, N=N, d=d, pfa=float(p), ns=ns, seed=seed, plot=False, save_path=None, verbose=verbose)
 
-        # MC (do NOT forward any dc_* or th flags)
-        res = run_sk_test(
-            M=M, N=N, d=d, pfa=float(pfa),
-            ns=ns, seed=seed,
-            plot=False, save_path=None,
-            tolerance=tolerance,
-            verbose=verbose,
-        )
-
-        # --- robust extraction of counts ---
-        below = res.get("below", res.get("below_raw"))
-        above = res.get("above", res.get("above_raw"))
-        total = res.get("total", res.get("ns", ns))
-
-        # Fallback: if counts missing, try to derive from returned SK map
-        if (below is None or above is None):
-            sk_map = res.get("sk_map_raw") or res.get("sk_map")
-            if sk_map is not None:
-                import numpy as np
-                sk = np.asarray(sk_map, dtype=float)
-                below = int(np.count_nonzero(sk < lo_th))
-                above = int(np.count_nonzero(sk > hi_th))
-                total = int(sk.size)
+        # robust extraction of counts
+        below = res.get("below_raw")
+        above = res.get("above_raw")
+        total = res.get("total")
+        if below is None or above is None or total is None:
+            sk_arr = res.get("sk") or res.get("sk_map_raw")
+            if sk_arr is not None:
+                a = np.asarray(sk_arr, float)
+                below = int(np.count_nonzero(a < lo_th))
+                above = int(np.count_nonzero(a > hi_th))
+                total = int(a.size)
             else:
-                # last-resort: avoid crash, report zeros
-                below = 0
-                above = 0
+                below = above = 0
                 total = int(ns)
 
         results.append({
-            "pfa": float(pfa),
+            "pfa": float(p),
             "threshold": (lo_th, hi_th),
             "std": std_sk,
             "below": int(below),
             "above": int(above),
-            "ns": int(total),           # keep what we actually counted
+            "ns": int(total),
             "M": int(M), "N": int(N), "d": float(d),
         })
 
@@ -608,5 +597,4 @@ def sweep_thresholds(
             transparent=transparent,
             th=th,
         )
-
     return results

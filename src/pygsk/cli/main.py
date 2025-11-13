@@ -143,6 +143,17 @@ def _add_simulator_args(sub: argparse.ArgumentParser):
                      help="Frequency bin width [Hz].")
 
     # ---- Contamination modes ----
+    #
+    # IMPORTANT: Names and semantics here MUST match what
+    #   runtests._adapt_sim_cli_to_simulate(...)
+    # expects, because that helper converts these CLI keywords
+    # into a structured `contam` dict for simulator.simulate(...).
+    #
+    # See also:
+    #   * cli/sk_cli.py::add_args         (SK test)
+    #   * cli/sk_renorm_cli.py::add_args  (Renorm SK test)
+    #
+    
     sub.add_argument("--mode", choices=["noise", "burst", "drift"], default="noise",
                      help="Injected signal model to simulate.")
 
