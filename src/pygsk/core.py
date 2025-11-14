@@ -471,6 +471,7 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
         raise TypeError("data must be a dict")
 
     pc = dict(data)  # non-destructive copy
+    sim_meta = pc.get("sim", None)
 
     # ---------- normalize common aliases on input ----------
     if "s1_map" in pc and "s1" not in pc:
@@ -534,6 +535,8 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
         out["s2_map"] = out["s2"]
         if "power" in pc:
             out["power"] = np.asarray(pc["power"], dtype=float)
+        if sim_meta is not None:
+            out["sim"] = sim_meta    
         return out
 
     # ----------------------------
@@ -621,7 +624,8 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
         # --- transitional compatibility (remove in a future major) ---
         out["s1_map"] = out["s1"]
         out["s2_map"] = out["s2"]
-
+        if sim_meta is not None:
+            out["sim"] = sim_meta
         return out
 
     # Neither schema found
