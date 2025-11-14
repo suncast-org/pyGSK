@@ -878,7 +878,7 @@ def plot_sk_dual_histogram(
     dpi: int = 300,
     transparent: bool = False,
     figsize: tuple[float, float] = (12.4, 7.8),
-    no_context: bool = False, sim_annot_style: str = "single",
+    no_context: bool = False, sim_annot_style: str = "wrap",
     row_heights: Tuple[float, float, float] = (0.78, 0.78, 1.25),
     wspace: float = 0.1,
     hspace: float = 0.10,
