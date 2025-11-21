@@ -641,9 +641,9 @@ def prepare_sk_input(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_sk(
     s1: np.ndarray,
     s2: np.ndarray,
-    M: int,
+    M: Any,
     *,
-    N: int = 1,
+    N: Any = 1,
     d: float = 1.0,
 ) -> np.ndarray:
     """
@@ -652,32 +652,60 @@ def get_sk(
     Parameters
     ----------
     s1 : ndarray
-        Array of accumulated power sums (shape: n_blocks × n_freq).
+        Array of accumulated power sums. Can be any shape, but must have the
+        same shape as ``s2``.
     s2 : ndarray
-        Array of accumulated squared-power sums (same shape as `s1`).
-    M : int
-        Number of accumulations per SK estimate.
-    N : int, optional
-        Shape parameter of the parent gamma distribution (true N).
+        Array of accumulated squared-power sums. Must have the same shape as
+        ``s1``.
+    M : int or array-like
+        Number of accumulations per SK estimate. Either a positive scalar, or
+        an array that is broadcast-compatible with ``s1`` / ``s2``.
+    N : int or array-like, optional
+        Shape parameter of the parent gamma distribution (true N). Either a
+        positive scalar or an array broadcast-compatible with ``s1`` / ``s2``.
     d : float, optional
-        Scale parameter of the parent gamma distribution.
+        Scale parameter of the parent gamma distribution (positive finite
+        scalar).
 
     Returns
     -------
     sk : ndarray
-        The SK estimator with the same shape as `s1`.
-    """
-    M = _ensure_int("M", M)
-    N = _ensure_int("N", N)
-    d = _ensure_float("d", d)
+        The SK estimator with the same shape as ``s1`` and ``s2``.
 
-    # Protect against division by zero
+    Notes
+    -----
+    - This implementation is fully element-wise and relies on NumPy
+      broadcasting. Scalar ``M`` / ``N`` reproduce the legacy behavior, while
+      array-valued ``M`` / ``N`` (e.g. per-frequency or per-(antenna,freq,block)
+      effective accumulations) are now supported.
+    """
+    # Canonicalize s1/s2
     s1 = np.asarray(s1, dtype=np.float64)
     s2 = np.asarray(s2, dtype=np.float64)
+    if s1.shape != s2.shape:
+        raise ValueError(f"s1 and s2 must have the same shape, got {s1.shape} and {s2.shape}")
+
+    # Allow scalar or array-like M, N – but they must be positive, and
+    # broadcast-compatible with s1/s2.
+    M_arr = np.asarray(M, dtype=np.float64)
+    N_arr = np.asarray(N, dtype=np.float64)
+    d_val = _ensure_float("d", d)
+
+    # Positivity checks (ignore NaNs here; they'll be cleaned later)
+    if np.any(M_arr <= 0):
+        raise ValueError("M must be > 0 everywhere.")
+    if np.any(N_arr <= 0):
+        raise ValueError("N must be > 0 everywhere.")
+
+    # Element-wise SK with broadcasting
     with np.errstate(divide="ignore", invalid="ignore"):
-        sk = ((M * N * d + 1) / (M - 1.0)) * ((M * s2) / (s1 ** 2) - 1.0)
-    sk[np.isnan(sk)] = 0.0
+        sk = ((M_arr * N_arr * d_val + 1.0) / (M_arr - 1.0)) * ((M_arr * s2) / (s1 ** 2) - 1.0)
+
+    # Historical behavior: replace non-finite values with 0.0
+    sk[~np.isfinite(sk)] = 0.0
     return sk
+
+
 
 
 # ---------------------------------------------------------------------
