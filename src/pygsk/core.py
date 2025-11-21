@@ -675,14 +675,13 @@ def get_sk(
     Notes
     -----
     - This implementation is fully element-wise and relies on NumPy
-      broadcasting. In particular, scalar ``M`` / ``N`` reproduce the older
-      behavior, while array-valued ``M`` / ``N`` (e.g. per-frequency or
-      per-(antenna,freq,block) effective accumulations) are now supported.
+      broadcasting. Scalar ``M`` / ``N`` reproduce the legacy behavior, while
+      array-valued ``M`` / ``N`` (e.g. per-frequency or per-(antenna,freq,block)
+      effective accumulations) are now supported.
     """
     # Canonicalize s1/s2
     s1 = np.asarray(s1, dtype=np.float64)
     s2 = np.asarray(s2, dtype=np.float64)
-
     if s1.shape != s2.shape:
         raise ValueError(f"s1 and s2 must have the same shape, got {s1.shape} and {s2.shape}")
 
@@ -692,7 +691,7 @@ def get_sk(
     N_arr = np.asarray(N, dtype=np.float64)
     d_val = _ensure_float("d", d)
 
-    # Positivity checks (ignore NaNs here; they will be cleaned later)
+    # Positivity checks (ignore NaNs here; they'll be cleaned later)
     if np.any(M_arr <= 0):
         raise ValueError("M must be > 0 everywhere.")
     if np.any(N_arr <= 0):
@@ -702,9 +701,10 @@ def get_sk(
     with np.errstate(divide="ignore", invalid="ignore"):
         sk = ((M_arr * N_arr * d_val + 1.0) / (M_arr - 1.0)) * ((M_arr * s2) / (s1 ** 2) - 1.0)
 
-    # Historical behavior: replace NaNs with 0.0 to avoid polluting downstream
+    # Historical behavior: replace non-finite values with 0.0
     sk[~np.isfinite(sk)] = 0.0
     return sk
+
 
 
 
