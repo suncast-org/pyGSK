@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.colors import LogNorm, ListedColormap, BoundaryNorm
 from collections.abc import Sequence as _ABCSequence
+from datetime import datetime, timedelta, timezone
 
 __all__ = [
     "plot_lc", "plot_dyn", "plot_lc_or_dyn", "plot_data",
@@ -30,7 +31,63 @@ __all__ = [
 # --------------------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------------------
-# --- New tiny helper (place near your other private utils) ---
+
+# ------------------------------------------------------------------
+# Time helpers for astrophysical data (MJD / MJD * 86400 seconds)
+# ------------------------------------------------------------------
+
+_MJD0 = datetime(1858, 11, 17, tzinfo=timezone.utc)  # MJD = 0 epoch
+
+
+def _mjd_to_datetime(mjd: float) -> datetime:
+    """Convert MJD (days) to UTC datetime."""
+    return _MJD0 + timedelta(days=float(mjd))
+
+
+def _normalize_time_axis_for_plot(
+    time: Optional[np.ndarray],
+    ns: int,
+) -> tuple[np.ndarray, Optional[datetime]]:
+    """
+    Normalize a time axis for plotting.
+
+    Returns
+    -------
+    t_plot : ndarray
+        1-D array of x-values to use for plotting.
+        - If time is None: [0, 1, ..., ns-1]
+        - If time looks like MJD days: seconds from start.
+        - If time looks like MJD seconds: seconds from start.
+        - Otherwise: original time array.
+    first_dt : datetime or None
+        UTC datetime of the first sample if MJD was detected, else None.
+    """
+    if time is None:
+        return np.arange(ns, dtype=float), None
+
+    t = np.asarray(time, dtype=float)
+    if t.ndim != 1 or t.size == 0:
+        return np.arange(ns, dtype=float), None
+
+    t0 = float(t[0])
+    first_dt: Optional[datetime] = None
+
+    # Case 1: MJD in days (e.g., 60000-ish)
+    if 3.0e4 <= t0 <= 8.0e4:
+        first_dt = _mjd_to_datetime(t0)
+        t_plot = (t - t0) * 86400.0  # seconds from start
+    # Case 2: MJD * 86400 (seconds since MJD0)
+    elif 3.0e9 <= t0 <= 1.0e10:
+        mjd0 = t0 / 86400.0
+        first_dt = _mjd_to_datetime(mjd0)
+        t_plot = t - t0  # seconds from start
+    else:
+        # Not an astrophysical absolute scale → leave as-is
+        t_plot = t
+
+    return t_plot, first_dt
+
+
 def _per_panel(
     val: Any,
     n: int = 4,
@@ -282,7 +339,8 @@ def plot_lc(
     else:
         y = np.asarray(data, float)
 
-    t = np.arange(y.size) if time is None else np.asarray(time, float)
+    ns = y.size
+    t_plot, first_dt = _normalize_time_axis_for_plot(time, ns)
 
     # Optional y-scale control (default: linear)
     if scale == "log":
@@ -292,16 +350,30 @@ def plot_lc(
             y = np.where(y > 0, y, np.nan)
         ax.set_yscale("log", nonpositive="clip")
 
-    ax.plot(t, y, **kwargs)
+    ax.plot(t_plot, y, **kwargs)
 
     if vmin is not None or vmax is not None:
         ax.set_ylim(vmin, vmax)
 
-    ax.set_xlabel("Time [s]" if time is not None else "Sample")
+    # --- X axis formatting ---
+    if first_dt is not None:
+        # Build ticks as in the standalone autocorr dynspec script
+        num_ticks = min(6, max(2, t_plot.size))
+        ticks = np.linspace(t_plot[0], t_plot[-1], num_ticks)
+        labels = []
+        for dt_rel in ticks:
+            dt_abs = first_dt + timedelta(seconds=float(dt_rel))
+            labels.append(dt_abs.strftime("%H:%M:%S"))
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_xlabel("Time (UTC, hh:mm:ss)")
+    else:
+        ax.set_xlabel("Time [s]" if time is not None else "Sample")
+
     if title:
         ax.set_title(title)
 
-    # ✅ Restore legacy: draw simulation info as a BOX (not vertical lines)
+    # ✅ Legacy behavior: draw simulation info as a BOX (not vertical lines)
     if annotate_lines:
         _annotate_box(ax, annotate_lines)
 
@@ -357,9 +429,9 @@ def plot_dyn(
         fig = ax.figure
 
     ns, nf = Z.shape
-    t = np.arange(ns) if time is None else np.asarray(time, float)
+    t_plot, first_dt = _normalize_time_axis_for_plot(time, ns)
     f = np.arange(nf) if freq_hz is None else np.asarray(freq_hz, float)
-    extent = [t[0], t[-1], f[0], f[-1]]
+    extent = [t_plot[0], t_plot[-1], f[0], f[-1]]
 
     # Categorical flags path (new; default is False so legacy unaffected)
     if is_categorical:
@@ -390,7 +462,20 @@ def plot_dyn(
                            cmap=cmap, vmin=vmin, vmax=vmax)
         cbar_lab = cbar_label
 
-    ax.set_xlabel("Time [s]" if time is not None else "Sample")
+    # X/Y labels with optional MJD-based formatting
+    if first_dt is not None:
+        num_ticks = min(6, max(2, t_plot.size))
+        ticks = np.linspace(t_plot[0], t_plot[-1], num_ticks)
+        labels = []
+        for dt_rel in ticks:
+            dt_abs = first_dt + timedelta(seconds=float(dt_rel))
+            labels.append(dt_abs.strftime("%H:%M:%S"))
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_xlabel("Time (UTC, hh:mm:ss)")
+    else:
+        ax.set_xlabel("Time [s]" if time is not None else "Sample")
+
     ax.set_ylabel("Frequency [Hz]" if freq_hz is not None else "Channel")
     if title:
         ax.set_title(title)
@@ -406,7 +491,7 @@ def plot_dyn(
         cb.set_ticks([-1, 0, 1])
         cb.set_ticklabels(["−1", "0", "+1"])
 
-    # Optional vertical annotations
+    # Optional annotations
     if annotate_lines:
         _annotate_box(ax, annotate_lines)
 
@@ -420,7 +505,7 @@ def plot_dyn(
 # --------------------------------------------------------------------------------------
 # Generic data plotter
 # --------------------------------------------------------------------------------------
-#Generic wrapper that decides LC vs Dyn (with annotations & scaling) ---
+# Generic wrapper that decides LC vs Dyn (with annotations & scaling) ---
 def plot_data(
     data_or_map: Mapping[str, Any] | np.ndarray,
     time: Optional[np.ndarray] = None,
@@ -533,7 +618,7 @@ def plot_data(
 
 
 
-#Histogram helper that supports log_x / log_bins / log_count ---
+# Histogram helper that supports log_x / log_bins / log_count ---
 def _plot_hist(
     sk_values,
     *,
