@@ -410,6 +410,254 @@ def _thresholds_typeIV(mu, m2, m3, m4, pfa):
 
 
 # ============================================================
+# Legacy IDL-style SK thresholds (d=1 only)
+# ============================================================
+
+def legacy_idl_gsk_thresholds(
+    M: int,
+    N: int,
+    pfa: float,
+    range_sigma: Tuple[float, float] = (6.0, 6.0),
+    bins: int = 1000,
+    sbins: int = 10,
+) -> Tuple[float, float]:
+    """
+    Legacy SK thresholds mimicking the old IDL GSK_THRESHOLDS() for d=1.
+
+    - Only SK (no Kurtosis) is implemented.
+    - Uses the hard-coded N<14 / N>=14 split.
+    - d is assumed to be 1; Nd=N.
+    - One-sided PFA.
+
+    Returns:
+        (lower, upper)
+    """
+    import math
+
+    M = float(M)
+    N = float(N)
+    if M <= 1:
+        raise ValueError("M must be > 1 for legacy SK thresholds.")
+    if N <= 0:
+        raise ValueError("N must be > 0 for legacy SK thresholds.")
+    if not (0.0 < pfa < 0.5):
+        raise ValueError("pfa must be in (0,0.5) for one-sided thresholds.")
+
+    # -------- SK branch (no /K) --------
+    m1 = 1.0
+
+    # Exact SK m2, m3 for d=1 (Nd=N) – same as in your IDL code
+    Nd = N
+    m2 = (2.0 * (M**2) * Nd * (1.0 + Nd)) / (
+        (M - 1.0) * (6.0 + 5.0 * M * Nd + (M**2) * (Nd**2))
+    )
+    m3 = (8.0 * (M**3) * Nd * (1.0 + Nd) * (-2.0 + Nd * (-5.0 + M * (4.0 + Nd)))) / (
+        ((M - 1.0) ** 2)
+        * (2.0 + M * Nd)
+        * (3.0 + M * Nd)
+        * (4.0 + M * Nd)
+        * (5.0 + M * Nd)
+    )
+
+    # beta1, beta2, g as in IDL
+    beta1 = (
+        8.0
+        * (2.0 + M * Nd)
+        * (3.0 + M * Nd)
+        * (-2.0 + Nd * (-5.0 + M * (4.0 + Nd))) ** 2
+    ) / (
+        (M - 1.0)
+        * Nd
+        * (1.0 + Nd)
+        * (4.0 + M * Nd) ** 2
+        * (5.0 + M * Nd) ** 2
+    )
+
+    beta2 = (
+        3.0
+        * (2.0 + M * Nd)
+        * (3.0 + M * Nd)
+        * (
+            24.0
+            + Nd
+            * (
+                48.0
+                + 84.0 * Nd
+                + M
+                * (
+                    -32.0
+                    + Nd
+                    * (
+                        -245.0
+                        - 93.0 * Nd
+                        + M
+                        * (
+                            125.0
+                            + Nd
+                            * (68.0 + M + (3.0 + M) * Nd)
+                        )
+                    )
+                )
+            )
+        )
+    ) / (
+        (M - 1.0)
+        * Nd
+        * (1.0 + Nd)
+        * (4.0 + M * Nd)
+        * (5.0 + M * Nd)
+        * (6.0 + M * Nd)
+        * (7.0 + M * Nd)
+    )
+
+    g = ((M - 1.0) * (4.0 + M * Nd) * (5.0 + M * Nd)) / (
+        2.0 * M * (-2.0 + Nd * (-5.0 + M * (4.0 + Nd)))
+    )
+
+    # N-dependent minimum M from IDL (for the Pearson-IV approximation)
+    mminarr = np.array([0, 24, 16, 14, 14, 14, 16, 17, 20, 24, 30, 40, 60, 120], float)
+    Mmin = 0.0
+    if (N > 0) and (N <= 13):
+        Mmin = mminarr[int(N)]
+    if N < 14 and M < Mmin:
+        raise ValueError(
+            f"For N={int(N)}, M={int(M)} is lower than the minimum value M={int(Mmin)} "
+            "required by the Pearson IV PDF (legacy IDL constraint)."
+        )
+
+    rng_lo, rng_hi = range_sigma
+    sigma = math.sqrt(m2)
+
+    # -------------------------------
+    # Case 1: N < 14 → Pearson IV
+    # -------------------------------
+    if N < 14:
+        r = 6.0 * (beta2 - beta1 - 1.0) / (2.0 * beta2 - 3.0 * beta1 - 6.0)
+        mm = (r + 2.0) / 2.0
+        sqrtf = math.sqrt(16.0 * (r - 1.0) - beta1 * (r - 2.0) * (r - 2.0))
+        nu = -r * (r - 2.0) * math.sqrt(beta1) / sqrtf
+        a = math.sqrt(m2) * sqrtf / 4.0
+        lam = m1 - (r - 2.0) * math.sqrt(beta1) * math.sqrt(m2) / 4.0
+
+        # Normalization as in IDL (complex Gamma)
+        z1 = mp.mpf(mm) + 0.5j * mp.mpf(nu)
+        z2 = mp.mpf(mm) - 0.5j * mp.mpf(nu)
+        num = mp.loggamma(z1) + mp.loggamma(z2) - mp.loggamma(mm - 0.5) - mp.loggamma(mm)
+        norm = mp.e**num / (a * mp.sqrt(mp.pi))
+        norm = abs(norm)
+        norm = (M - 1.0) * norm / M
+
+        x_min = m1 - rng_lo * sigma
+        x_max = m1 + rng_hi * sigma
+        x = np.linspace(x_min, x_max, bins + 1)
+
+        def pdf_iv(xx: np.ndarray) -> np.ndarray:
+            yy = (xx - lam) / a
+            return np.array(
+                norm
+                * (1.0 + yy * yy) ** (-mm)
+                * np.exp(-nu * np.arctan(yy)),
+                float,
+            )
+
+        def integ(xx, yy):
+            return float(np.trapz(yy, xx))
+
+        pdf = pdf_iv(x)
+
+        # CF
+        cf = np.zeros_like(x, dtype=float)
+        xx = x[0] - 10.0 * sigma + np.linspace(0.0, 10.0 * sigma, 10 * sbins + 1)
+        yy = pdf_iv(xx)
+        cf[0] = integ(xx, yy)
+        for i in range(1, len(x)):
+            xx = np.linspace(x[i - 1], x[i], sbins + 1)
+            yy = pdf_iv(xx)
+            cf[i] = cf[i - 1] + integ(xx, yy)
+
+        # CCF
+        ccf = np.zeros_like(x, dtype=float)
+        xx = x[-1] + 10.0 * sigma - np.linspace(0.0, 10.0 * sigma, 10 * sbins + 1)
+        xx = np.sort(xx)
+        yy = pdf_iv(xx)
+        ccf[-1] = integ(xx, yy)
+        for i in range(len(x) - 2, -1, -1):
+            xx = np.linspace(x[i], x[i + 1], sbins + 1)
+            xx = np.sort(xx)
+            yy = pdf_iv(xx)
+            ccf[i] = ccf[i + 1] + integ(xx, yy)
+
+    # ---------------------------------------
+    # Case 2: N >= 14 → gamma-like (Pearson III-ish)
+    # ---------------------------------------
+    else:
+        x_min = max(m1 - rng_lo * sigma, 0.0)
+        x_max = m1 + rng_hi * sigma
+        x = np.linspace(x_min, x_max, bins + 1)
+
+        A = 1.0 / math.sqrt(2.0 * math.pi * m2)
+        B = math.sqrt(2.0 * math.pi * (g + 1.0)) * (
+            math.exp(-(g + 1.0)) * ((g + 1.0) ** g)
+        )
+        Cnorm = float(B / mp.gamma(g + 1.0))
+        denom_mu = 2.0 * (m2**2) / m3
+        kappa = 4.0 * (m2**3) / (m3**2)
+        lam2 = 2.0 * (m2**2) / m3
+
+        def pdf_gamma(xx: np.ndarray) -> np.ndarray:
+            z = xx / denom_mu
+            return np.array(
+                A
+                * Cnorm
+                * (z ** (kappa - 1.0))
+                * np.exp(-(2.0 * m2 / m3) * (xx - lam2)),
+                float,
+            )
+
+        def integ(xx, yy):
+            return float(np.trapz(yy, xx))
+
+        pdf = pdf_gamma(x)
+
+        # CF
+        cf = np.zeros_like(x, dtype=float)
+        xx = np.linspace(0.0, x[0], 10 * sbins + 1)
+        yy = pdf_gamma(xx)
+        cf[0] = integ(xx, yy)
+        for i in range(1, len(x)):
+            xx = np.linspace(x[i - 1], x[i], sbins + 1)
+            yy = pdf_gamma(xx)
+            cf[i] = cf[i - 1] + integ(xx, yy)
+
+        # CCF
+        ccf = np.zeros_like(x, dtype=float)
+        xx = x[-1] + 10.0 * sigma - np.linspace(0.0, 10.0 * sigma, 10 * sbins + 1)
+        xx = np.sort(xx)
+        yy = pdf_gamma(xx)
+        ccf[-1] = integ(xx, yy)
+        for i in range(len(x) - 2, -1, -1):
+            xx = np.linspace(x[i], x[i + 1], sbins + 1)
+            xx = np.sort(xx)
+            yy = pdf_gamma(xx)
+            ccf[i] = ccf[i + 1] + integ(xx, yy)
+
+    # --- Thresholds from CF / CCF ---
+    idx_lo = np.where(cf > pfa)[0]
+    if idx_lo.size == 0:
+        lower = float("nan")
+    else:
+        lower = float(x[idx_lo[0]])
+
+    idx_hi = np.where(ccf > pfa)[0]
+    if idx_hi.size == 0:
+        upper = float("nan")
+    else:
+        upper = float(x[idx_hi[-1]])
+
+    return lower, upper
+
+
+# ============================================================
 # PUBLIC API
 # ============================================================
 
@@ -417,7 +665,7 @@ def _thresholds_typeIV(mu, m2, m3, m4, pfa):
 def compute_sk_thresholds(
     M: int, N: int, d: float, pfa: float,
     return_meta: Literal[True],
-    mode: Literal['auto3','kappa','explicit'] = ...,
+    mode: Literal['auto3','kappa','explicit','legacy'] = ...,
     family: Optional[Literal['I','III','IV','VI']] = ...,
     strict: bool = ...,
     kappa_eps: float = ...
@@ -426,7 +674,7 @@ def compute_sk_thresholds(
 def compute_sk_thresholds(
     M: int, N: int, d: float, pfa: float,
     return_meta: Literal[False] = ...,
-    mode: Literal['auto3','kappa','explicit'] = ...,
+    mode: Literal['auto3','kappa','explicit','legacy'] = ...,
     family: Optional[Literal['I','III','IV','VI']] = ...,
     strict: bool = ...,
     kappa_eps: float = ...
@@ -436,7 +684,7 @@ def compute_sk_thresholds(
     M: int, N: int, d: float, pfa: float,
     return_meta: bool = False,
     # selection controls
-    mode: Literal['auto3','kappa','explicit'] = 'auto3',
+    mode: Literal['auto3','kappa','explicit','legacy'] = 'auto3',
     family: Optional[Literal['I','III','IV','VI']] = None,
     # behavior knobs
     strict: bool = False,
@@ -449,6 +697,7 @@ def compute_sk_thresholds(
       - mode='auto3' (default): use Pearson Type III from exact central moments.
       - mode='kappa'         : Pearson selection via (β1,β2) discriminant (I/IV/VI), tolerance kappa_eps.
       - mode='explicit'      : force a family via `family in {'I','III','IV','VI'}`.
+      - mode='legacy'        : reproduce historical IDL GSK thresholds for d=1.
 
     Return:
       (lower, upper, std_sk) or (lower, upper, std_sk, meta)
@@ -492,6 +741,27 @@ def compute_sk_thresholds(
             "kappa_eps": kappa_eps,
             "near_boundary": None,
         }
+
+    # Mode: legacy – reproduce historical IDL GSK thresholds for d=1
+    if mode == 'legacy':
+        if d != 1.0:
+            raise ValueError(
+                "mode='legacy' is defined only for d=1 (historical IDL implementation). "
+                "For d != 1, use mode='auto3' or mode='kappa'."
+            )
+
+        lo_leg, hi_leg = legacy_idl_gsk_thresholds(M, N, pfa)
+
+        meta = _base_meta()
+        meta.update({
+            "selection": "legacy",
+            "requested_family": None,
+            "family": "legacy_idl",
+            "rel_err_model_m4": None,
+        })
+        if return_meta:
+            return (float(lo_leg), float(hi_leg), std_sk, meta)
+        return (float(lo_leg), float(hi_leg), std_sk)
 
     # Mode: explicit
     if mode == 'explicit':
